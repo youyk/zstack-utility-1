@@ -518,7 +518,7 @@ class APICreateAffinityGroupMsg(object):
         self.name = NotNoneField()
         self.description = None
         #mandatory field
-        #valid values: [antiSoft]
+        #valid values: [antiSoft, antiHard]
         self.policy = NotNoneField()
         #valid values: [host]
         self.type = None
