@@ -509,6 +509,20 @@ class APIAddVmToAffinityGroupMsg(object):
         self.systemTags = OptionalList()
         self.userTags = OptionalList()
 
+APICHANGEAFFINITYGROUPSTATEMSG_FULL_NAME = 'org.zstack.header.affinitygroup.APIChangeAffinityGroupStateMsg'
+class APIChangeAffinityGroupStateMsg(object):
+    FULL_NAME='org.zstack.header.affinitygroup.APIChangeAffinityGroupStateMsg'
+    def __init__(self):
+        #mandatory field
+        self.uuid = NotNoneField()
+        #mandatory field
+        #valid values: [enable, disable]
+        self.stateEvent = NotNoneField()
+        self.session = None
+        self.timeout = None
+        self.systemTags = OptionalList()
+        self.userTags = OptionalList()
+
 
 APICREATEAFFINITYGROUPMSG_FULL_NAME = 'org.zstack.header.affinitygroup.APICreateAffinityGroupMsg'
 class APICreateAffinityGroupMsg(object):
@@ -15045,6 +15059,7 @@ api_names = [
     'APICalculateAccountSpendingMsg',
     'APICalculateAccountSpendingReply',
     'APICancelLongJobMsg',
+    'APIChangeAffinityGroupStateMsg',
     'APIChangeAlarmStateMsg',
     'APIChangeBackupStorageStateMsg',
     'APIChangeClusterStateMsg',
@@ -22482,7 +22497,7 @@ class QueryObjectAccountResourceRefInventory(object):
      }
 
 class QueryObjectAffinityGroupInventory(object):
-     PRIMITIVE_FIELDS = ['appliance','name','lastOpDate','description','type','uuid','version','policy','createDate','__userTag__','__systemTag__']
+     PRIMITIVE_FIELDS = ['appliance','name','lastOpDate','description','state','type','uuid','version','policy','createDate','__userTag__','__systemTag__']
      EXPANDED_FIELDS = ['usages']
      QUERY_OBJECT_MAP = {
         'usages' : 'QueryObjectAffinityGroupUsageInventory',
