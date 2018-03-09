@@ -890,6 +890,18 @@ class CancelLongJobAction(inventory.APICancelLongJobMsg):
         self.out = evt
         return self.out
 
+class ChangeAffinityGroupStateAction(inventory.APIChangeAffinityGroupStateMsg):
+    def __init__(self):
+        super(ChangeAffinityGroupStateAction, self).__init__()
+        self.sessionUuid = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[ChangeAffinityGroupStateAction] cannot be None')
+        evt = api.async_call(self, self.sessionUuid)
+        self.out = evt
+        return self.out
+
 class ChangeAlarmStateAction(inventory.APIChangeAlarmStateMsg):
     def __init__(self):
         super(ChangeAlarmStateAction, self).__init__()
@@ -6709,6 +6721,20 @@ class QuerySNSTopicAction(inventory.APIQuerySNSTopicMsg):
     def run(self):
         if not self.sessionUuid:
             raise Exception('sessionUuid of action[QuerySNSTopicAction] cannot be None')
+        reply = api.sync_call(self, self.sessionUuid)
+        self.reply = reply
+        self.out = reply.inventories
+        return self.out
+
+class QuerySNSTopicSubscriberAction(inventory.APIQuerySNSTopicSubscriberMsg):
+    def __init__(self):
+        super(QuerySNSTopicSubscriberAction, self).__init__()
+        self.sessionUuid = None
+        self.reply = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[QuerySNSTopicSubscriberAction] cannot be None')
         reply = api.sync_call(self, self.sessionUuid)
         self.reply = reply
         self.out = reply.inventories

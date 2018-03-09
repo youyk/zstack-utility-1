@@ -509,6 +509,20 @@ class APIAddVmToAffinityGroupMsg(object):
         self.systemTags = OptionalList()
         self.userTags = OptionalList()
 
+APICHANGEAFFINITYGROUPSTATEMSG_FULL_NAME = 'org.zstack.header.affinitygroup.APIChangeAffinityGroupStateMsg'
+class APIChangeAffinityGroupStateMsg(object):
+    FULL_NAME='org.zstack.header.affinitygroup.APIChangeAffinityGroupStateMsg'
+    def __init__(self):
+        #mandatory field
+        self.uuid = NotNoneField()
+        #mandatory field
+        #valid values: [enable, disable]
+        self.stateEvent = NotNoneField()
+        self.session = None
+        self.timeout = None
+        self.systemTags = OptionalList()
+        self.userTags = OptionalList()
+
 
 APICREATEAFFINITYGROUPMSG_FULL_NAME = 'org.zstack.header.affinitygroup.APICreateAffinityGroupMsg'
 class APICreateAffinityGroupMsg(object):
@@ -1532,18 +1546,14 @@ class APICreateEcsSecurityGroupRuleRemoteMsg(object):
         #mandatory field
         self.groupUuid = NotNoneField()
         #mandatory field
-        #valid values: [ingress, egress]
         self.direction = NotNoneField()
         #mandatory field
-        #valid values: [tcp, udp, icmp, gre, all]
         self.protocol = NotNoneField()
         #mandatory field
         self.portRange = NotNoneField()
         #mandatory field
         self.cidr = NotNoneField()
-        #valid values: [accept, drop]
         self.policy = None
-        #valid values: [intranet, internet]
         self.nictype = None
         self.priority = None
         self.description = None
@@ -7852,6 +7862,7 @@ class APIDetachIsoFromVmInstanceMsg(object):
     def __init__(self):
         #mandatory field
         self.vmInstanceUuid = NotNoneField()
+        self.isoUuid = None
         self.session = None
         self.timeout = None
         self.systemTags = OptionalList()
@@ -11493,7 +11504,7 @@ class APIGetVipUsedPortsMsg(object):
         #mandatory field
         self.uuid = NotNoneField()
         #mandatory field
-        #valid values: [tcp, udp]
+        #valid values: [TCP, UDP]
         self.protocol = NotNoneField()
         self.session = None
         self.timeout = None
@@ -12122,6 +12133,10 @@ class APIUpdateSchedulerTriggerMsg(object):
         self.uuid = NotNoneField()
         self.name = None
         self.description = None
+        self.schedulerInterval = None
+        self.repeatCount = None
+        self.startTime = None
+        self.cron = None
         self.session = None
         self.timeout = None
         self.systemTags = OptionalList()
@@ -12312,6 +12327,37 @@ class APIQuerySNSTopicMsg(object):
 APIQUERYSNSTOPICREPLY_FULL_NAME = 'org.zstack.sns.APIQuerySNSTopicReply'
 class APIQuerySNSTopicReply(object):
     FULL_NAME='org.zstack.sns.APIQuerySNSTopicReply'
+    def __init__(self):
+        self.inventories = OptionalList()
+        self.total = None
+        self.success = None
+        self.error = None
+
+
+APIQUERYSNSTOPICSUBSCRIBERMSG_FULL_NAME = 'org.zstack.sns.APIQuerySNSTopicSubscriberMsg'
+class APIQuerySNSTopicSubscriberMsg(object):
+    FULL_NAME='org.zstack.sns.APIQuerySNSTopicSubscriberMsg'
+    def __init__(self):
+        #mandatory field
+        self.conditions = NotNoneList()
+        self.limit = None
+        self.start = None
+        self.count = None
+        self.groupBy = None
+        self.replyWithCount = None
+        self.sortBy = None
+        #valid values: [asc, desc]
+        self.sortDirection = None
+        self.fields = OptionalList()
+        self.session = None
+        self.timeout = None
+        self.systemTags = OptionalList()
+        self.userTags = OptionalList()
+
+
+APIQUERYSNSTOPICSUBSCRIBERREPLY_FULL_NAME = 'org.zstack.sns.APIQuerySNSTopicSubscriberReply'
+class APIQuerySNSTopicSubscriberReply(object):
+    FULL_NAME='org.zstack.sns.APIQuerySNSTopicSubscriberReply'
     def __init__(self):
         self.inventories = OptionalList()
         self.total = None
@@ -15013,6 +15059,7 @@ api_names = [
     'APICalculateAccountSpendingMsg',
     'APICalculateAccountSpendingReply',
     'APICancelLongJobMsg',
+    'APIChangeAffinityGroupStateMsg',
     'APIChangeAlarmStateMsg',
     'APIChangeBackupStorageStateMsg',
     'APIChangeClusterStateMsg',
@@ -15720,6 +15767,8 @@ api_names = [
     'APIQuerySNSTextTemplateReply',
     'APIQuerySNSTopicMsg',
     'APIQuerySNSTopicReply',
+    'APIQuerySNSTopicSubscriberMsg',
+    'APIQuerySNSTopicSubscriberReply',
     'APIQuerySchedulerJobMsg',
     'APIQuerySchedulerJobReply',
     'APIQuerySchedulerTriggerMsg',
@@ -22448,7 +22497,7 @@ class QueryObjectAccountResourceRefInventory(object):
      }
 
 class QueryObjectAffinityGroupInventory(object):
-     PRIMITIVE_FIELDS = ['appliance','name','lastOpDate','description','type','uuid','version','policy','createDate','__userTag__','__systemTag__']
+     PRIMITIVE_FIELDS = ['appliance','name','lastOpDate','description','state','type','uuid','version','policy','createDate','__userTag__','__systemTag__']
      EXPANDED_FIELDS = ['usages']
      QUERY_OBJECT_MAP = {
         'usages' : 'QueryObjectAffinityGroupUsageInventory',
@@ -22549,7 +22598,7 @@ class QueryObjectBackupStorageZoneRefInventory(object):
      }
 
 class QueryObjectBaremetalChassisInventory(object):
-     PRIMITIVE_FIELDS = ['ipmiPort','name','lastOpDate','description','ipmiPassword','ipmiAddress','ipmiUsername','uuid','status','createDate','__userTag__','__systemTag__']
+     PRIMITIVE_FIELDS = ['ipmiPort','name','lastOpDate','description','ipmiAddress','ipmiUsername','uuid','status','createDate','__userTag__','__systemTag__']
      EXPANDED_FIELDS = []
      QUERY_OBJECT_MAP = {
      }
@@ -23866,6 +23915,7 @@ queryMessageInventoryMap = {
      'APIQuerySNSHttpEndpointMsg' : QueryObjectSNSHttpEndpointInventory,
      'APIQuerySNSTextTemplateMsg' : QueryObjectSNSTextTemplateInventory,
      'APIQuerySNSTopicMsg' : QueryObjectSNSTopicInventory,
+     'APIQuerySNSTopicSubscriberMsg' : QueryObjectSNSSubscriberInventory,
      'APIQuerySchedulerJobMsg' : QueryObjectSchedulerJobInventory,
      'APIQuerySchedulerTriggerMsg' : QueryObjectSchedulerTriggerInventory,
      'APIQuerySecurityGroupMsg' : QueryObjectSecurityGroupInventory,
