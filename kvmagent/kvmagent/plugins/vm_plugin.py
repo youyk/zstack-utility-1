@@ -290,6 +290,18 @@ class KvmDetachUsbDeviceRsp(kvmagent.AgentResponse):
     def __init__(self):
         super(KvmDetachUsbDeviceRsp, self).__init__()
 
+class KvmResizeVolumeCommand(kvmagent.AgentCommand):
+    def __init__(self):
+        super(KvmResizeVolumeCommand, self).__init__()
+        self.vmUuid = None
+        self.size = None
+        self.deviceId = None
+
+class KvmResizeVolumeRsp(kvmagent.AgentResponse):
+    def __init__(self):
+        super(KvmResizeVolumeRsp, self).__init__()
+        self.size = None
+
 class VncPortIptableRule(object):
     def __init__(self):
         self.host_ip = None
@@ -1853,6 +1865,29 @@ class Vm(object):
 
         return target_disk, disk_name
 
+    def resize_volume(self, device_id, device_type, size):
+        target_disk, disk_name = self._get_target_disk(device_id)
+
+        alias_name = target_disk.alias.name_
+
+        r, o, e = bash.bash_roe("virsh qemu-monitor-command %s block_resize drive-%s %sB --hmp"
+                                % (self.uuid, alias_name, size))
+
+        logger.debug("resize volume[%s] of vm[%s]" % (alias_name, self.uuid))
+        if r != 0:
+            raise kvmagent.KvmError(
+                'unable to resize volume[id:{1}] of vm[uuid:{0}] because {2}'.format(device_id, self.uuid, e))
+
+        if device_type == 'iscsi' or device_type == 'file':
+            return linux.qcow2_virtualsize(target_disk.source.file_)
+        elif device_type == 'ceph':
+            o = shell.call('rbd --format json info %s' % target_disk.source.name_)
+            o = jsonobject.loads(o)
+            return long(o.size_)
+        else:
+            raise Exception('unknown volume deviceType: %s' % device_type)
+
+
     def take_volume_snapshot(self, device_id, install_path, full_snapshot=False):
         target_disk, disk_name = self._get_target_disk(device_id)
         snapshot_dir = os.path.dirname(install_path)
@@ -2977,6 +3012,7 @@ class VmPlugin(kvmagent.KvmAgent):
     HOT_UNPLUG_PCI_DEVICE = "/pcidevice/hotunplug"
     KVM_ATTACH_USB_DEVICE_PATH = "/vm/usbdevice/attach"
     KVM_DETACH_USB_DEVICE_PATH = "/vm/usbdevice/detach"
+    KVM_RESIZE_VOLUME_PATH = "/volume/resize"
 
     VM_OP_START = "start"
     VM_OP_STOP = "stop"
@@ -3868,6 +3904,15 @@ class VmPlugin(kvmagent.KvmAgent):
             rsp.error = "%s %s" % (e, o)
         return jsonobject.dumps(rsp)
 
+    @kvmagent.replyerror
+    def kvm_resize_volume(self, req):
+        cmd = jsonobject.loads(req[http.REQUEST_BODY])
+        rsp = KvmResizeVolumeRsp()
+
+        vm = get_vm_by_uuid(cmd.vmUuid, exception_if_not_existing=False)
+        rsp.size = vm.resize_volume(cmd.deviceId, cmd.deviceType, cmd.size)
+        return jsonobject.dumps(rsp)
+
     def start(self):
         http_server = kvmagent.get_http_server()
 
@@ -3907,6 +3952,7 @@ class VmPlugin(kvmagent.KvmAgent):
         http_server.register_async_uri(self.HOT_UNPLUG_PCI_DEVICE, self.hot_unplug_pci_device)
         http_server.register_async_uri(self.KVM_ATTACH_USB_DEVICE_PATH, self.kvm_attach_usb_device)
         http_server.register_async_uri(self.KVM_DETACH_USB_DEVICE_PATH, self.kvm_detach_usb_device)
+        http_server.register_async_uri(self.KVM_RESIZE_VOLUME_PATH, self.kvm_resize_volume)
 
         self.register_libvirt_event()
 
