@@ -809,6 +809,9 @@ tag:{{o.tag}},option:dns-server,{{o.dns}}
 {% if o.dnsDomain -%}
 tag:{{o.tag}},option:domain-name,{{o.dnsDomain}}
 {% endif -%}
+{% for r in o.hostRoutes -%}
+tag:{{o.tag}},option:classless-static-route,{{r.prefix}},{{r.nexthop}}
+{% endfor -%}
 {% else -%}
 tag:{{o.tag}},3
 tag:{{o.tag}},6
