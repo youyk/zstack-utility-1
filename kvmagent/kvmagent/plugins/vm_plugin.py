@@ -300,7 +300,6 @@ class KvmResizeVolumeCommand(kvmagent.AgentCommand):
 class KvmResizeVolumeRsp(kvmagent.AgentResponse):
     def __init__(self):
         super(KvmResizeVolumeRsp, self).__init__()
-        self.size = None
 
 class VncPortIptableRule(object):
     def __init__(self):
@@ -1877,15 +1876,6 @@ class Vm(object):
         if r != 0:
             raise kvmagent.KvmError(
                 'unable to resize volume[id:{1}] of vm[uuid:{0}] because {2}'.format(device_id, self.uuid, e))
-
-        if device_type == 'iscsi' or device_type == 'file':
-            return linux.qcow2_virtualsize(target_disk.source.file_)
-        elif device_type == 'ceph':
-            o = shell.call('rbd --format json info %s' % target_disk.source.name_)
-            o = jsonobject.loads(o)
-            return long(o.size_)
-        else:
-            raise Exception('unknown volume deviceType: %s' % device_type)
 
 
     def take_volume_snapshot(self, device_id, install_path, full_snapshot=False):
@@ -3908,7 +3898,7 @@ class VmPlugin(kvmagent.KvmAgent):
         rsp = KvmResizeVolumeRsp()
 
         vm = get_vm_by_uuid(cmd.vmUuid, exception_if_not_existing=False)
-        rsp.size = vm.resize_volume(cmd.deviceId, cmd.deviceType, cmd.size)
+        vm.resize_volume(cmd.deviceId, cmd.deviceType, cmd.size)
         return jsonobject.dumps(rsp)
 
     def start(self):
