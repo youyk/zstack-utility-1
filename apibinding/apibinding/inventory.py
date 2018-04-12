@@ -5147,6 +5147,19 @@ class APIRemoveUserFromGroupMsg(object):
         self.userTags = OptionalList()
 
 
+APIRENEWSESSIONMSG_FULL_NAME = 'org.zstack.header.identity.APIRenewSessionMsg'
+class APIRenewSessionMsg(object):
+    FULL_NAME='org.zstack.header.identity.APIRenewSessionMsg'
+    def __init__(self):
+        #mandatory field
+        self.sessionUuid = NotNoneField()
+        self.duration = None
+        self.session = None
+        self.timeout = None
+        self.systemTags = OptionalList()
+        self.userTags = OptionalList()
+
+
 APIREVOKERESOURCESHARINGMSG_FULL_NAME = 'org.zstack.header.identity.APIRevokeResourceSharingMsg'
 class APIRevokeResourceSharingMsg(object):
     FULL_NAME='org.zstack.header.identity.APIRevokeResourceSharingMsg'
@@ -16038,6 +16051,7 @@ api_names = [
     'APIRemoveUserFromGroupMsg',
     'APIRemoveVmFromAffinityGroupMsg',
     'APIRemoveVmNicFromLoadBalancerMsg',
+    'APIRenewSessionMsg',
     'APIReply',
     'APIRequestBaremetalConsoleAccessMsg',
     'APIRequestConsoleAccessMsg',
