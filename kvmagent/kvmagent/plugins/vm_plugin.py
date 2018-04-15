@@ -1448,6 +1448,16 @@ class Vm(object):
             logger.warn(err)
             raise kvmagent.KvmError(err)
 
+        def volume_native_aio(volume_xml_obj):
+            if not addons:
+                return
+
+            vol_aio = addons['NativeAio']
+            if not vol_aio:
+                return
+
+            volume_xml_obj.set("io", "native")
+
         def volume_qos(volume_xml_obj):
             if not addons:
                 return
@@ -1490,6 +1500,7 @@ class Vm(object):
                     e(disk, 'target', None, {'dev': 'hd%s' % self.DEVICE_LETTERS[volume.deviceId], 'bus': 'ide'})
 
             volume_qos(disk)
+            volume_native_aio(disk)
             return etree.tostring(disk)
 
         def iscsibased_volume():
@@ -1502,6 +1513,7 @@ class Vm(object):
                 vi.chap_username = volume.chapUsername
                 vi.chap_password = volume.chapPassword
                 volume_qos(vi)
+                volume_native_aio(vi)
                 return etree.tostring(vi.to_xmlobject())
 
             def blk_iscsi():
@@ -1513,6 +1525,7 @@ class Vm(object):
                 bi.chap_username = volume.chapUsername
                 bi.chap_password = volume.chapPassword
                 volume_qos(bi)
+                volume_native_aio(bi)
                 return etree.tostring(bi.to_xmlobject())
 
             if volume.useVirtio:
@@ -1527,6 +1540,7 @@ class Vm(object):
                 vc.dev_letter = self.DEVICE_LETTERS[volume.deviceId]
                 xml_obj = vc.to_xmlobject()
                 volume_qos(xml_obj)
+                volume_native_aio(xml_obj)
                 return etree.tostring(xml_obj)
 
             def blk_ceph():
@@ -1538,6 +1552,7 @@ class Vm(object):
                 ic.dev_letter = self.DEVICE_LETTERS[volume.deviceId]
                 xml_obj = ic.to_xmlobject()
                 volume_qos(xml_obj)
+                volume_native_aio(xml_obj)
                 return etree.tostring(xml_obj)
 
             def virtio_scsi_ceph():
@@ -1546,6 +1561,7 @@ class Vm(object):
                 vsc.dev_letter = self.DEVICE_LETTERS[volume.deviceId]
                 xml_obj = vsc.to_xmlobject()
                 volume_qos(xml_obj)
+                volume_native_aio(xml_obj)
                 return etree.tostring(xml_obj)
 
             if volume.useVirtioSCSI:
@@ -1563,6 +1579,7 @@ class Vm(object):
                 vc.dev_letter = self.DEVICE_LETTERS[volume.deviceId]
                 xml_obj = vc.to_xmlobject()
                 volume_qos(xml_obj)
+                volume_native_aio(xml_obj)
                 return etree.tostring(xml_obj)
 
             def blk_fusionstor():
@@ -1571,6 +1588,7 @@ class Vm(object):
                 ic.dev_letter = self.DEVICE_LETTERS[volume.deviceId]
                 xml_obj = ic.to_xmlobject()
                 volume_qos(xml_obj)
+                volume_native_aio(xml_obj)
                 return etree.tostring(xml_obj)
 
             def virtio_scsi_fusionstor():
@@ -1579,6 +1597,7 @@ class Vm(object):
                 vsc.dev_letter = self.DEVICE_LETTERS[volume.deviceId]
                 xml_obj = vsc.to_xmlobject()
                 volume_qos(xml_obj)
+                volume_native_aio(xml_obj)
                 return etree.tostring(xml_obj)
 
             if volume.useVirtioSCSI:
@@ -2631,6 +2650,16 @@ class Vm(object):
                     # e(iotune, 'write_iops_sec_max', str(qos.totalIops))
                     # e(iotune, 'total_iops_sec_max', str(qos.totalIops))
 
+            def volume_native_aio(volume_xml_obj):
+                if not cmd.addons:
+                    return
+
+                vol_aio = cmd.addons['NativeAio']
+                if not vol_aio:
+                    return
+
+                volume_xml_obj.set("io", "native")
+
             volumes.sort(key=lambda d: d.deviceId)
             scsi_device_ids = [v.deviceId for v in volumes if v.useVirtioSCSI]
             for v in volumes:
@@ -2659,6 +2688,7 @@ class Vm(object):
                 if v.deviceId == 0 and cmd.bootDev[0] == 'hd' and cmd.useBootMenu:
                     e(vol, 'boot', None, {'order': '1'})
                 volume_qos(vol)
+                volume_native_aio(vol)
                 devices.append(vol)
 
         def make_nics():
