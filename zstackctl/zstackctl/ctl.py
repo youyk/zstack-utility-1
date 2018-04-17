@@ -620,6 +620,8 @@ class Ctl(object):
     ZSTACK_UI_HOME = '/usr/local/zstack/zstack-ui/'
     ZSTACK_UI_KEYSTORE = ZSTACK_UI_HOME + 'ui.keystore.p12'
     ZSTACK_UI_KEYSTORE_CP = ZSTACK_UI_KEYSTORE + '.cp'
+    # for console proxy https
+    ZSTACK_UI_KEYSTORE_PEM = ZSTACK_UI_HOME + 'ui.keystore.pem'
 
     def __init__(self):
         self.commands = {}
@@ -7429,7 +7431,7 @@ class StartUiCmd(Command):
         parser.add_argument('--enable-ssl', help="Enable HTTPS for ZStack UI.", action="store_true", default=False)
         parser.add_argument('--ssl-keyalias', help="HTTPS SSL KeyAlias.")
         parser.add_argument('--ssl-keystore', help="HTTPS SSL KeyStore Path.")
-        parser.add_argument('--ssl-keystore-type', help="HTTPS SSL KeyStore Type (PKCS12/JKS).")
+        parser.add_argument('--ssl-keystore-type', choices=['PKCS12', 'JKS'], type=str.upper, help="HTTPS SSL KeyStore Type.")
         parser.add_argument('--ssl-keystore-password', help="HTTPS SSL KeyStore Password.")
 
         # arguments for ui_db
@@ -7462,7 +7464,9 @@ class StartUiCmd(Command):
                     if not default_ip:
                         info('UI server is still running[PID:%s]' % pid)
                     else:
-                        info('UI server is still running[PID:%s], http://%s:%s' % (pid, default_ip, port))
+                        check_https_cmd = ShellCmd('ps -f -p %s | grep ssl.enabled=true >/dev/null' % pid)
+                        check_https_cmd(is_exception=False)
+                        info('UI server is still running[PID:%s], %s://%s:%s' % (pid, 'https' if check_https_cmd.return_code == 0 else 'http', default_ip, port))
                     return False
 
         pid = find_process_by_cmdline('zstack-ui.war')
@@ -7486,7 +7490,18 @@ class StartUiCmd(Command):
         p12.set_privatekey(key)
         p12.set_certificate(cert)
         p12.set_friendlyname('zstackui')
-        open(ctl.ZSTACK_UI_KEYSTORE, 'w').write(p12.export(b'password'))
+        with open(ctl.ZSTACK_UI_KEYSTORE, 'w') as f:
+            f.write(p12.export(b'password'))
+
+    def _gen_ssl_keystore_pem_from_pkcs12(self, ssl_keystore, ssl_keystore_password):
+        try:
+            p12 = OpenSSL.crypto.load_pkcs12(file(ssl_keystore, 'rb').read(), ssl_keystore_password)
+        except Exception as e:
+            raise CtlError('failed to convert %s to %s because %s' % (ssl_keystore, ctl.ZSTACK_UI_KEYSTORE_PEM, str(e)))
+        cert_pem = OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, p12.get_certificate())
+        pkey_pem = OpenSSL.crypto.dump_privatekey(OpenSSL.crypto.FILETYPE_PEM, p12.get_privatekey())
+        with open(ctl.ZSTACK_UI_KEYSTORE_PEM, 'w') as f:
+            f.write(cert_pem + pkey_pem)
 
     def _get_db_info(self):
         # get default db_url, db_username, db_password etc.
@@ -7557,6 +7572,12 @@ class StartUiCmd(Command):
         if args.ssl_keystore != ctl.ZSTACK_UI_KEYSTORE and args.ssl_keystore != ctl.ZSTACK_UI_KEYSTORE_CP:
             copyfile(args.ssl_keystore, ctl.ZSTACK_UI_KEYSTORE_CP)
             args.ssl_keystore = ctl.ZSTACK_UI_KEYSTORE_CP
+
+        # convert args.ssl_keystore to .pem
+        if args.ssl_keystore_type != 'PKCS12' and not os.path.exists(ctl.ZSTACK_UI_KEYSTORE_PEM):
+            raise CtlError('%s not found.' % ctl.ZSTACK_UI_KEYSTORE_PEM)
+        if args.ssl_keystore_type == 'PKCS12':
+            self._gen_ssl_keystore_pem_from_pkcs12(args.ssl_keystore, args.ssl_keystore_password)
 
         # ui_db
         self._get_db_info()
@@ -7654,10 +7675,10 @@ class ConfigUiCmd(Command):
         parser.add_argument('--log', help="UI log folder. [DEFAULT] %s" % ui_logging_path)
 
         # arguments for https
-        parser.add_argument('--enable-ssl', help="Enable HTTPS for ZStack UI. [DEFAULT] False")
+        parser.add_argument('--enable-ssl', choices=['True', 'False'], type=str.title, help="Enable HTTPS for ZStack UI. [DEFAULT] False")
         parser.add_argument('--ssl-keyalias', help="HTTPS SSL KeyAlias. [DEFAULT] zstackui")
         parser.add_argument('--ssl-keystore', help="HTTPS SSL KeyStore Path. [DEFAULT] %s" % ctl.ZSTACK_UI_KEYSTORE)
-        parser.add_argument('--ssl-keystore-type', help="HTTPS SSL KeyStore Type (PKCS12/JKS). [DEFAULT] PKCS12")
+        parser.add_argument('--ssl-keystore-type', choices=['PKCS12', 'JKS'], type=str.upper, help="HTTPS SSL KeyStore Type. [DEFAULT] PKCS12")
         parser.add_argument('--ssl-keystore-password', help="HTTPS SSL KeyStore Password. [DEFAULT] password")
 
         # arguments for ui_db
@@ -7738,38 +7759,38 @@ class ConfigUiCmd(Command):
                 copyfile(args.ssl_keystore, ctl.ZSTACK_UI_KEYSTORE_CP)
                 args.ssl_keystore = ctl.ZSTACK_UI_KEYSTORE_CP
 
-        if args.mn_host:
-            ctl.write_ui_property("mn_host", args.mn_host)
-        if args.mn_port:
-            ctl.write_ui_property("mn_port", args.mn_port)
-        if args.webhook_host:
-            ctl.write_ui_property("webhook_host", args.webhook_host)
-        if args.webhook_port:
-            ctl.write_ui_property("webhook_port", args.webhook_port)
-        if args.server_port:
-            ctl.write_ui_property("server_port", args.server_port)
-        if args.log:
-            ctl.write_ui_property("log", args.log)
+        if args.mn_host or args.mn_host == '':
+            ctl.write_ui_property("mn_host", args.mn_host.strip())
+        if args.mn_port or args.mn_port == '':
+            ctl.write_ui_property("mn_port", args.mn_port.strip())
+        if args.webhook_host or args.webhook_host == '':
+            ctl.write_ui_property("webhook_host", args.webhook_host.strip())
+        if args.webhook_port or args.webhook_port == '':
+            ctl.write_ui_property("webhook_port", args.webhook_port.strip())
+        if args.server_port or args.server_port == '':
+            ctl.write_ui_property("server_port", args.server_port.strip())
+        if args.log or args.log == '':
+            ctl.write_ui_property("log", args.log.strip())
 
         # https
         if args.enable_ssl:
             ctl.write_ui_property("enable_ssl", args.enable_ssl.lower())
-        if args.ssl_keyalias:
-            ctl.write_ui_property("ssl_keyalias", args.ssl_keyalias)
-        if args.ssl_keystore:
-            ctl.write_ui_property("ssl_keystore", args.ssl_keystore)
-        if args.ssl_keystore_type:
-            ctl.write_ui_property("ssl_keystore_type", args.ssl_keystore_type)
-        if args.ssl_keystore_password:
-            ctl.write_ui_property("ssl_keystore_password", args.ssl_keystore_password)
+        if args.ssl_keyalias or args.ssl_keyalias == '':
+            ctl.write_ui_property("ssl_keyalias", args.ssl_keyalias.strip())
+        if args.ssl_keystore or args.ssl_keystore == '':
+            ctl.write_ui_property("ssl_keystore", args.ssl_keystore.strip())
+        if args.ssl_keystore_type or args.ssl_keystore_type == '':
+            ctl.write_ui_property("ssl_keystore_type", args.ssl_keystore_type.strip())
+        if args.ssl_keystore_password or args.ssl_keystore_password == '':
+            ctl.write_ui_property("ssl_keystore_password", args.ssl_keystore_password.strip())
 
         # ui_db
-        if args.db_url:
-            ctl.write_ui_property("db_url", args.db_url)
-        if args.db_username:
-            ctl.write_ui_property("db_username", args.db_username)
-        if args.db_password:
-            ctl.write_ui_property("db_password", args.db_password)
+        if args.db_url or args.db_url == '':
+            ctl.write_ui_property("db_url", args.db_url.strip())
+        if args.db_username or args.db_username == '':
+            ctl.write_ui_property("db_username", args.db_username.strip())
+        if args.db_password or args.db_password == '':
+            ctl.write_ui_property("db_password", args.db_password.strip())
 
 # For UI 2.0
 class ShowUiCfgCmd(Command):
