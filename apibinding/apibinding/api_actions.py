@@ -38,6 +38,18 @@ class AddAliyunKeySecretAction(inventory.APIAddAliyunKeySecretMsg):
         self.out = evt
         return self.out
 
+class AddAttributesToIAM2OrganizationAction(inventory.APIAddAttributesToIAM2OrganizationMsg):
+    def __init__(self):
+        super(AddAttributesToIAM2OrganizationAction, self).__init__()
+        self.sessionUuid = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[AddAttributesToIAM2OrganizationAction] cannot be None')
+        evt = api.async_call(self, self.sessionUuid)
+        self.out = evt
+        return self.out
+
 class AddAttributesToIAM2ProjectAction(inventory.APIAddAttributesToIAM2ProjectMsg):
     def __init__(self):
         super(AddAttributesToIAM2ProjectAction, self).__init__()
@@ -70,18 +82,6 @@ class AddAttributesToIAM2VirtualIDGroupAction(inventory.APIAddAttributesToIAM2Vi
     def run(self):
         if not self.sessionUuid:
             raise Exception('sessionUuid of action[AddAttributesToIAM2VirtualIDGroupAction] cannot be None')
-        evt = api.async_call(self, self.sessionUuid)
-        self.out = evt
-        return self.out
-
-class AddAttributesToOrganizationAction(inventory.APIAddAttributesToOrganizationMsg):
-    def __init__(self):
-        super(AddAttributesToOrganizationAction, self).__init__()
-        self.sessionUuid = None
-        self.out = None
-    def run(self):
-        if not self.sessionUuid:
-            raise Exception('sessionUuid of action[AddAttributesToOrganizationAction] cannot be None')
         evt = api.async_call(self, self.sessionUuid)
         self.out = evt
         return self.out
@@ -6882,6 +6882,20 @@ class QueryIAM2OrganizationAction(inventory.APIQueryIAM2OrganizationMsg):
         self.out = reply.inventories
         return self.out
 
+class QueryIAM2OrganizationAttributeAction(inventory.APIQueryIAM2OrganizationAttributeMsg):
+    def __init__(self):
+        super(QueryIAM2OrganizationAttributeAction, self).__init__()
+        self.sessionUuid = None
+        self.reply = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[QueryIAM2OrganizationAttributeAction] cannot be None')
+        reply = api.sync_call(self, self.sessionUuid)
+        self.reply = reply
+        self.out = reply.inventories
+        return self.out
+
 class QueryIAM2ProjectAction(inventory.APIQueryIAM2ProjectMsg):
     def __init__(self):
         super(QueryIAM2ProjectAction, self).__init__()
@@ -6891,6 +6905,20 @@ class QueryIAM2ProjectAction(inventory.APIQueryIAM2ProjectMsg):
     def run(self):
         if not self.sessionUuid:
             raise Exception('sessionUuid of action[QueryIAM2ProjectAction] cannot be None')
+        reply = api.sync_call(self, self.sessionUuid)
+        self.reply = reply
+        self.out = reply.inventories
+        return self.out
+
+class QueryIAM2ProjectAttributeAction(inventory.APIQueryIAM2ProjectAttributeMsg):
+    def __init__(self):
+        super(QueryIAM2ProjectAttributeAction, self).__init__()
+        self.sessionUuid = None
+        self.reply = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[QueryIAM2ProjectAttributeAction] cannot be None')
         reply = api.sync_call(self, self.sessionUuid)
         self.reply = reply
         self.out = reply.inventories
@@ -6924,6 +6952,20 @@ class QueryIAM2VirtualIDAction(inventory.APIQueryIAM2VirtualIDMsg):
         self.out = reply.inventories
         return self.out
 
+class QueryIAM2VirtualIDAttributeAction(inventory.APIQueryIAM2VirtualIDAttributeMsg):
+    def __init__(self):
+        super(QueryIAM2VirtualIDAttributeAction, self).__init__()
+        self.sessionUuid = None
+        self.reply = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[QueryIAM2VirtualIDAttributeAction] cannot be None')
+        reply = api.sync_call(self, self.sessionUuid)
+        self.reply = reply
+        self.out = reply.inventories
+        return self.out
+
 class QueryIAM2VirtualIDGroupAction(inventory.APIQueryIAM2VirtualIDGroupMsg):
     def __init__(self):
         super(QueryIAM2VirtualIDGroupAction, self).__init__()
@@ -6933,6 +6975,20 @@ class QueryIAM2VirtualIDGroupAction(inventory.APIQueryIAM2VirtualIDGroupMsg):
     def run(self):
         if not self.sessionUuid:
             raise Exception('sessionUuid of action[QueryIAM2VirtualIDGroupAction] cannot be None')
+        reply = api.sync_call(self, self.sessionUuid)
+        self.reply = reply
+        self.out = reply.inventories
+        return self.out
+
+class QueryIAM2VirtualIDGroupAttributeAction(inventory.APIQueryIAM2VirtualIDGroupAttributeMsg):
+    def __init__(self):
+        super(QueryIAM2VirtualIDGroupAttributeAction, self).__init__()
+        self.sessionUuid = None
+        self.reply = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[QueryIAM2VirtualIDGroupAttributeAction] cannot be None')
         reply = api.sync_call(self, self.sessionUuid)
         self.reply = reply
         self.out = reply.inventories
@@ -10038,6 +10094,18 @@ class UpdateIAM2OrganizationAction(inventory.APIUpdateIAM2OrganizationMsg):
         self.out = evt
         return self.out
 
+class UpdateIAM2OrganizationAttributeAction(inventory.APIUpdateIAM2OrganizationAttributeMsg):
+    def __init__(self):
+        super(UpdateIAM2OrganizationAttributeAction, self).__init__()
+        self.sessionUuid = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[UpdateIAM2OrganizationAttributeAction] cannot be None')
+        evt = api.async_call(self, self.sessionUuid)
+        self.out = evt
+        return self.out
+
 class UpdateIAM2ProjectAction(inventory.APIUpdateIAM2ProjectMsg):
     def __init__(self):
         super(UpdateIAM2ProjectAction, self).__init__()
@@ -10046,6 +10114,18 @@ class UpdateIAM2ProjectAction(inventory.APIUpdateIAM2ProjectMsg):
     def run(self):
         if not self.sessionUuid:
             raise Exception('sessionUuid of action[UpdateIAM2ProjectAction] cannot be None')
+        evt = api.async_call(self, self.sessionUuid)
+        self.out = evt
+        return self.out
+
+class UpdateIAM2ProjectAttributeAction(inventory.APIUpdateIAM2ProjectAttributeMsg):
+    def __init__(self):
+        super(UpdateIAM2ProjectAttributeAction, self).__init__()
+        self.sessionUuid = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[UpdateIAM2ProjectAttributeAction] cannot be None')
         evt = api.async_call(self, self.sessionUuid)
         self.out = evt
         return self.out
@@ -10074,6 +10154,18 @@ class UpdateIAM2VirtualIDAction(inventory.APIUpdateIAM2VirtualIDMsg):
         self.out = evt
         return self.out
 
+class UpdateIAM2VirtualIDAttributeAction(inventory.APIUpdateIAM2VirtualIDAttributeMsg):
+    def __init__(self):
+        super(UpdateIAM2VirtualIDAttributeAction, self).__init__()
+        self.sessionUuid = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[UpdateIAM2VirtualIDAttributeAction] cannot be None')
+        evt = api.async_call(self, self.sessionUuid)
+        self.out = evt
+        return self.out
+
 class UpdateIAM2VirtualIDGroupAction(inventory.APIUpdateIAM2VirtualIDGroupMsg):
     def __init__(self):
         super(UpdateIAM2VirtualIDGroupAction, self).__init__()
@@ -10082,6 +10174,18 @@ class UpdateIAM2VirtualIDGroupAction(inventory.APIUpdateIAM2VirtualIDGroupMsg):
     def run(self):
         if not self.sessionUuid:
             raise Exception('sessionUuid of action[UpdateIAM2VirtualIDGroupAction] cannot be None')
+        evt = api.async_call(self, self.sessionUuid)
+        self.out = evt
+        return self.out
+
+class UpdateIAM2VirtualIDGroupAttributeAction(inventory.APIUpdateIAM2VirtualIDGroupAttributeMsg):
+    def __init__(self):
+        super(UpdateIAM2VirtualIDGroupAttributeAction, self).__init__()
+        self.sessionUuid = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[UpdateIAM2VirtualIDGroupAttributeAction] cannot be None')
         evt = api.async_call(self, self.sessionUuid)
         self.out = evt
         return self.out
