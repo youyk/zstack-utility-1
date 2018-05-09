@@ -24381,12 +24381,6 @@ class QueryObjectGlobalConfigInventory(object):
      QUERY_OBJECT_MAP = {
      }
 
-class QueryObjectGpuUsageInventory(object):
-     PRIMITIVE_FIELDS = ['pciDeviceUuid','hostUuid','vmUuid','lastOpDate','accountUuid','id','inventory','dateInLong','status','createDate','__userTag__','__systemTag__']
-     EXPANDED_FIELDS = []
-     QUERY_OBJECT_MAP = {
-     }
-
 class QueryObjectHostCapacityInventory(object):
      PRIMITIVE_FIELDS = ['totalMemory','totalCpu','availableMemory','availableCpu','uuid','cpuSockets','totalPhysicalMemory','availablePhysicalMemory','cpuNum','__userTag__','__systemTag__']
      EXPANDED_FIELDS = []
@@ -24761,6 +24755,12 @@ class QueryObjectPciDevicePciDeviceOfferingRefInventory(object):
         'pciDevice' : 'QueryObjectPciDeviceInventory',
      }
 
+class QueryObjectPciDeviceUsageInventory(object):
+     PRIMITIVE_FIELDS = ['pciDeviceUuid','vmUuid','lastOpDate','accountUuid','id','inventory','dateInLong','status','createDate','__userTag__','__systemTag__']
+     EXPANDED_FIELDS = []
+     QUERY_OBJECT_MAP = {
+     }
+
 class QueryObjectPolicyInventory(object):
      PRIMITIVE_FIELDS = ['name','accountUuid','uuid','__userTag__','__systemTag__']
      EXPANDED_FIELDS = ['account','user','group']
@@ -24780,9 +24780,9 @@ class QueryObjectPortForwardingRuleInventory(object):
 
 class QueryObjectPriceInventory(object):
      PRIMITIVE_FIELDS = ['resourceUnit','price','lastOpDate','resourceName','uuid','timeUnit','dateInLong','createDate','__userTag__','__systemTag__']
-     EXPANDED_FIELDS = ['gpuOfferings']
+     EXPANDED_FIELDS = ['pciDeviceOfferings']
      QUERY_OBJECT_MAP = {
-        'gpuOfferings' : 'QueryObjectPricePciDeviceOfferingRefInventory',
+        'pciDeviceOfferings' : 'QueryObjectPricePciDeviceOfferingRefInventory',
      }
 
 class QueryObjectPricePciDeviceOfferingRefInventory(object):
