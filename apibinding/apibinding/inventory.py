@@ -12175,10 +12175,8 @@ APICREATEPCIDEVICEOFFERINGMSG_FULL_NAME = 'org.zstack.pciDevice.APICreatePciDevi
 class APICreatePciDeviceOfferingMsg(object):
     FULL_NAME='org.zstack.pciDevice.APICreatePciDeviceOfferingMsg'
     def __init__(self):
-        #mandatory field
-        self.name = NotNoneField()
+        self.name = None
         self.description = None
-        self.type = None
         #mandatory field
         self.vendorId = NotNoneField()
         #mandatory field
