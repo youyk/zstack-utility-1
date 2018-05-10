@@ -10119,6 +10119,46 @@ class APIUpdateLdapServerMsg(object):
         self.userTags = OptionalList()
 
 
+APIDELETELICENSEMSG_FULL_NAME = 'org.zstack.license.APIDeleteLicenseMsg'
+class APIDeleteLicenseMsg(object):
+    FULL_NAME='org.zstack.license.APIDeleteLicenseMsg'
+    def __init__(self):
+        self.uuid = None
+        #mandatory field
+        self.managementNodeUuid = NotNoneField()
+        self.session = None
+        self.timeout = None
+        self.systemTags = OptionalList()
+        self.userTags = OptionalList()
+
+
+APIDELETELICENSEREPLY_FULL_NAME = 'org.zstack.license.APIDeleteLicenseReply'
+class APIDeleteLicenseReply(object):
+    FULL_NAME='org.zstack.license.APIDeleteLicenseReply'
+    def __init__(self):
+        self.success = None
+        self.error = None
+
+
+APIGETLICENSEADDONSMSG_FULL_NAME = 'org.zstack.license.APIGetLicenseAddOnsMsg'
+class APIGetLicenseAddOnsMsg(object):
+    FULL_NAME='org.zstack.license.APIGetLicenseAddOnsMsg'
+    def __init__(self):
+        self.session = None
+        self.timeout = None
+        self.systemTags = OptionalList()
+        self.userTags = OptionalList()
+
+
+APIGETLICENSEADDONSREPLY_FULL_NAME = 'org.zstack.license.APIGetLicenseAddOnsReply'
+class APIGetLicenseAddOnsReply(object):
+    FULL_NAME='org.zstack.license.APIGetLicenseAddOnsReply'
+    def __init__(self):
+        self.addons = OptionalList()
+        self.success = None
+        self.error = None
+
+
 APIGETLICENSECAPABILITIESMSG_FULL_NAME = 'org.zstack.license.APIGetLicenseCapabilitiesMsg'
 class APIGetLicenseCapabilitiesMsg(object):
     FULL_NAME='org.zstack.license.APIGetLicenseCapabilitiesMsg'
@@ -15998,6 +16038,8 @@ api_names = [
     'APIDeleteL3NetworkMsg',
     'APIDeleteLdapBindingMsg',
     'APIDeleteLdapServerMsg',
+    'APIDeleteLicenseMsg',
+    'APIDeleteLicenseReply',
     'APIDeleteLoadBalancerListenerMsg',
     'APIDeleteLoadBalancerMsg',
     'APIDeleteLongJobMsg',
@@ -16201,6 +16243,8 @@ api_names = [
     'APIGetL3NetworkTypesReply',
     'APIGetLdapEntryMsg',
     'APIGetLdapEntryReply',
+    'APIGetLicenseAddOnsMsg',
+    'APIGetLicenseAddOnsReply',
     'APIGetLicenseCapabilitiesMsg',
     'APIGetLicenseCapabilitiesReply',
     'APIGetLicenseInfoMsg',
