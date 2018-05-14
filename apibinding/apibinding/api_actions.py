@@ -1466,6 +1466,18 @@ class ChangeSecurityGroupStateAction(inventory.APIChangeSecurityGroupStateMsg):
         self.out = evt
         return self.out
 
+class ChangeTicketStatusAction(inventory.APIChangeTicketStatusMsg):
+    def __init__(self):
+        super(ChangeTicketStatusAction, self).__init__()
+        self.sessionUuid = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[ChangeTicketStatusAction] cannot be None')
+        evt = api.async_call(self, self.sessionUuid)
+        self.out = evt
+        return self.out
+
 class ChangeVipStateAction(inventory.APIChangeVipStateMsg):
     def __init__(self):
         super(ChangeVipStateAction, self).__init__()
@@ -2030,6 +2042,18 @@ class CreateIAM2ProjectTemplateFromProjectAction(inventory.APICreateIAM2ProjectT
         self.out = evt
         return self.out
 
+class CreateIAM2TickFlowCollectionAction(inventory.APICreateIAM2TickFlowCollectionMsg):
+    def __init__(self):
+        super(CreateIAM2TickFlowCollectionAction, self).__init__()
+        self.sessionUuid = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[CreateIAM2TickFlowCollectionAction] cannot be None')
+        evt = api.async_call(self, self.sessionUuid)
+        self.out = evt
+        return self.out
+
 class CreateIAM2VirtualIDAction(inventory.APICreateIAM2VirtualIDMsg):
     def __init__(self):
         super(CreateIAM2VirtualIDAction, self).__init__()
@@ -2482,6 +2506,18 @@ class CreateSystemTagAction(inventory.APICreateSystemTagMsg):
     def run(self):
         if not self.sessionUuid:
             raise Exception('sessionUuid of action[CreateSystemTagAction] cannot be None')
+        evt = api.async_call(self, self.sessionUuid)
+        self.out = evt
+        return self.out
+
+class CreateTicketAction(inventory.APICreateTicketMsg):
+    def __init__(self):
+        super(CreateTicketAction, self).__init__()
+        self.sessionUuid = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[CreateTicketAction] cannot be None')
         evt = api.async_call(self, self.sessionUuid)
         self.out = evt
         return self.out
@@ -3778,6 +3814,18 @@ class DeleteTagAction(inventory.APIDeleteTagMsg):
     def run(self):
         if not self.sessionUuid:
             raise Exception('sessionUuid of action[DeleteTagAction] cannot be None')
+        evt = api.async_call(self, self.sessionUuid)
+        self.out = evt
+        return self.out
+
+class DeleteTicketAction(inventory.APIDeleteTicketMsg):
+    def __init__(self):
+        super(DeleteTicketAction, self).__init__()
+        self.sessionUuid = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[DeleteTicketAction] cannot be None')
         evt = api.async_call(self, self.sessionUuid)
         self.out = evt
         return self.out
@@ -7778,6 +7826,34 @@ class QueryTagAction(inventory.APIQueryTagMsg):
         self.out = reply.inventories
         return self.out
 
+class QueryTicketAction(inventory.APIQueryTicketMsg):
+    def __init__(self):
+        super(QueryTicketAction, self).__init__()
+        self.sessionUuid = None
+        self.reply = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[QueryTicketAction] cannot be None')
+        reply = api.sync_call(self, self.sessionUuid)
+        self.reply = reply
+        self.out = reply.inventories
+        return self.out
+
+class QueryTicketHistoryAction(inventory.APIQueryTicketHistoryMsg):
+    def __init__(self):
+        super(QueryTicketHistoryAction, self).__init__()
+        self.sessionUuid = None
+        self.reply = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[QueryTicketHistoryAction] cannot be None')
+        reply = api.sync_call(self, self.sessionUuid)
+        self.reply = reply
+        self.out = reply.inventories
+        return self.out
+
 class QueryUsbDeviceAction(inventory.APIQueryUsbDeviceMsg):
     def __init__(self):
         super(QueryUsbDeviceAction, self).__init__()
@@ -10522,6 +10598,18 @@ class UpdateSystemTagAction(inventory.APIUpdateSystemTagMsg):
     def run(self):
         if not self.sessionUuid:
             raise Exception('sessionUuid of action[UpdateSystemTagAction] cannot be None')
+        evt = api.async_call(self, self.sessionUuid)
+        self.out = evt
+        return self.out
+
+class UpdateTicketRequestAction(inventory.APIUpdateTicketRequestMsg):
+    def __init__(self):
+        super(UpdateTicketRequestAction, self).__init__()
+        self.sessionUuid = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[UpdateTicketRequestAction] cannot be None')
         evt = api.async_call(self, self.sessionUuid)
         self.out = evt
         return self.out
