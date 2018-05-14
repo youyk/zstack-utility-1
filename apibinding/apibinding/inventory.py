@@ -24766,7 +24766,7 @@ class QueryObjectPciDevicePciDeviceOfferingRefInventory(object):
      }
 
 class QueryObjectPciDeviceUsageInventory(object):
-     PRIMITIVE_FIELDS = ['pciDeviceUuid','vmUuid','lastOpDate','accountUuid','id','inventory','dateInLong','status','createDate','__userTag__','__systemTag__']
+     PRIMITIVE_FIELDS = ['pciDeviceUuid','vmUuid','lastOpDate','accountUuid','description','id','inventory','dateInLong','status','createDate','__userTag__','__systemTag__']
      EXPANDED_FIELDS = []
      QUERY_OBJECT_MAP = {
      }
