@@ -7267,7 +7267,7 @@ class InstallLicenseCmd(Command):
 
     def install_argparse_arguments(self, parser):
         parser.add_argument('--license', '-f', help="path to the license file", required=True)
-        parser.add_argument('--addon', '-a', action='true', help="[OPTIONAL] flag to add an add on license", required=False)
+        parser.add_argument('--addon', '-a', action='store_true', help="[OPTIONAL] flag to add an add on license", required=False)
         parser.add_argument('--prikey', help="[OPTIONAL] the path to the private key used to generate license request")
 
     def run(self, args):
