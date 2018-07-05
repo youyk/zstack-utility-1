@@ -104,6 +104,10 @@ class Cli(object):
     ACCOUNT_RESET_PASSWORD_NAME = 'APIUpdateAccountMsg'
     USER_RESET_PASSWORD_NAME = 'APIUpdateUserMsg'
     QUERY_ACCOUNT_NAME = 'APIQueryAccountMsg'
+    GET_TWO_FACTOR_AUTHENTICATION_SECRET = 'APIGetTwoFactorAuthenticationSecretMsg'
+    GET_TWO_FACTOR_AUTHENTICATION_STATE = 'APIGetTwoFactorAuthenticationStateMsg'
+    no_session_message = [LOGIN_MESSAGE_NAME, LOGIN_BY_USER_NAME, LOGIN_BY_LDAP_MESSAGE_NAME,
+                          GET_TWO_FACTOR_AUTHENTICATION_SECRET, GET_TWO_FACTOR_AUTHENTICATION_STATE]
 
     @staticmethod
     def register_message_creator(apiname, func):
@@ -256,8 +260,7 @@ class Cli(object):
 
     def do_command(self, args):
         def check_session(apiname):
-            if not self.session_uuid and apiname not in [self.LOGIN_MESSAGE_NAME, self.LOGIN_BY_USER_NAME,
-                                                         self.LOGIN_BY_LDAP_MESSAGE_NAME]:
+            if not self.session_uuid and apiname not in self.no_session_message:
                 self.print_error('''Please login before running any API message
 example: %sLogInByAccount accountName=admin password=your_super_secure_admin_password''' % prompt)
                 return False
