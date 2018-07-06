@@ -99,6 +99,7 @@ class Cli(object):
     LOGIN_BY_LDAP_MESSAGE_NAME = 'APILogInByLdapMsg'
     LOGOUT_MESSAGE_NAME = 'APILogOutMsg'
     LOGIN_BY_USER_NAME = 'APILogInByUserMsg'
+    LOGIN_BY_USER_IAM2 = 'APILoginIAM2VirtualIDMsg'
     CREATE_ACCOUNT_NAME = 'APICreateAccountMsg'
     CREATE_USER_NAME = 'APICreateUserMsg'
     ACCOUNT_RESET_PASSWORD_NAME = 'APIUpdateAccountMsg'
@@ -107,7 +108,7 @@ class Cli(object):
     GET_TWO_FACTOR_AUTHENTICATION_SECRET = 'APIGetTwoFactorAuthenticationSecretMsg'
     GET_TWO_FACTOR_AUTHENTICATION_STATE = 'APIGetTwoFactorAuthenticationStateMsg'
     no_session_message = [LOGIN_MESSAGE_NAME, LOGIN_BY_USER_NAME, LOGIN_BY_LDAP_MESSAGE_NAME,
-                          GET_TWO_FACTOR_AUTHENTICATION_SECRET, GET_TWO_FACTOR_AUTHENTICATION_STATE]
+                          GET_TWO_FACTOR_AUTHENTICATION_SECRET, GET_TWO_FACTOR_AUTHENTICATION_STATE, LOGIN_BY_USER_IAM2]
 
     @staticmethod
     def register_message_creator(apiname, func):
