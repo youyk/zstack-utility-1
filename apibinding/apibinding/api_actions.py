@@ -6014,6 +6014,30 @@ class GetTaskProgressAction(inventory.APIGetTaskProgressMsg):
         self.out = evt
         return self.out
 
+class GetTwoFactorAuthenticationSecretAction(inventory.APIGetTwoFactorAuthenticationSecretMsg):
+    def __init__(self):
+        super(GetTwoFactorAuthenticationSecretAction, self).__init__()
+        self.sessionUuid = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[GetTwoFactorAuthenticationSecretAction] cannot be None')
+        evt = api.async_call(self, self.sessionUuid)
+        self.out = evt
+        return self.out
+
+class GetTwoFactorAuthenticationStateAction(inventory.APIGetTwoFactorAuthenticationStateMsg):
+    def __init__(self):
+        super(GetTwoFactorAuthenticationStateAction, self).__init__()
+        self.sessionUuid = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[GetTwoFactorAuthenticationStateAction] cannot be None')
+        evt = api.async_call(self, self.sessionUuid)
+        self.out = evt
+        return self.out
+
 class GetUsbDeviceCandidatesForAttachingVmAction(inventory.APIGetUsbDeviceCandidatesForAttachingVmMsg):
     def __init__(self):
         super(GetUsbDeviceCandidatesForAttachingVmAction, self).__init__()
@@ -9046,6 +9070,18 @@ class RefreshLoadBalancerAction(inventory.APIRefreshLoadBalancerMsg):
     def run(self):
         if not self.sessionUuid:
             raise Exception('sessionUuid of action[RefreshLoadBalancerAction] cannot be None')
+        evt = api.async_call(self, self.sessionUuid)
+        self.out = evt
+        return self.out
+
+class RefreshSharedblockDeviceCapacityAction(inventory.APIRefreshSharedblockDeviceCapacityMsg):
+    def __init__(self):
+        super(RefreshSharedblockDeviceCapacityAction, self).__init__()
+        self.sessionUuid = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[RefreshSharedblockDeviceCapacityAction] cannot be None')
         evt = api.async_call(self, self.sessionUuid)
         self.out = evt
         return self.out
