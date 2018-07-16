@@ -3945,6 +3945,7 @@ class VmPlugin(kvmagent.KvmAgent):
         isc = ImageStoreClient()
         bitmap = None
         parent = None
+        mode = None
 
         if drivertype != 'qcow2':
             raise kvmagent.KvmError('unsupported volume driver: ' + drivertype)
@@ -3966,6 +3967,11 @@ class VmPlugin(kvmagent.KvmAgent):
 
         if mode == 'incremental':
             return bitmap, cmd.lastBackup
+
+        if mode == 'top' and parent is None:
+            bf = linux.qcow2_get_backing_file(topoverlay)
+            imf = isc.upload_image(cmd.hostname, bf)
+            parent = isc._build_install_path(imf.name, imf.id)
 
         return bitmap, parent
 
