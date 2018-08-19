@@ -17291,9 +17291,9 @@ class APIUpdateUsbDeviceMsg(object):
         self.userTags = OptionalList()
 
 
-APIADDV2VCONVERTERSERVERMSG_FULL_NAME = 'org.zstack.v2v.APIAddV2VConverterServerMsg'
-class APIAddV2VConverterServerMsg(object):
-    FULL_NAME='org.zstack.v2v.APIAddV2VConverterServerMsg'
+APIADDV2VCONVERSIONHOSTMSG_FULL_NAME = 'org.zstack.v2v.APIAddV2VConversionHostMsg'
+class APIAddV2VConversionHostMsg(object):
+    FULL_NAME='org.zstack.v2v.APIAddV2VConversionHostMsg'
     def __init__(self):
         #mandatory field
         self.name = NotNoneField()
@@ -17318,7 +17318,7 @@ class APIConvertVmFromForeignHypervisorMsg(object):
         self.name = None
         self.description = None
         #mandatory field
-        self.converterServerUuid = NotNoneField()
+        self.conversionHostUuid = NotNoneField()
         #mandatory field
         self.cpuNum = NotNoneField()
         #mandatory field
@@ -17342,9 +17342,9 @@ class APIConvertVmFromForeignHypervisorMsg(object):
         self.userTags = OptionalList()
 
 
-APIDELETEV2VCONVERTERSERVERMSG_FULL_NAME = 'org.zstack.v2v.APIDeleteV2VConverterServerMsg'
-class APIDeleteV2VConverterServerMsg(object):
-    FULL_NAME='org.zstack.v2v.APIDeleteV2VConverterServerMsg'
+APIDELETEV2VCONVERSIONHOSTMSG_FULL_NAME = 'org.zstack.v2v.APIDeleteV2VConversionHostMsg'
+class APIDeleteV2VConversionHostMsg(object):
+    FULL_NAME='org.zstack.v2v.APIDeleteV2VConversionHostMsg'
     def __init__(self):
         #mandatory field
         self.uuid = NotNoneField()
@@ -17355,9 +17355,9 @@ class APIDeleteV2VConverterServerMsg(object):
         self.userTags = OptionalList()
 
 
-APIQUERYV2VCONVERTERSERVERMSG_FULL_NAME = 'org.zstack.v2v.APIQueryV2VConverterServerMsg'
-class APIQueryV2VConverterServerMsg(object):
-    FULL_NAME='org.zstack.v2v.APIQueryV2VConverterServerMsg'
+APIQUERYV2VCONVERSIONHOSTMSG_FULL_NAME = 'org.zstack.v2v.APIQueryV2VConversionHostMsg'
+class APIQueryV2VConversionHostMsg(object):
+    FULL_NAME='org.zstack.v2v.APIQueryV2VConversionHostMsg'
     def __init__(self):
         #mandatory field
         self.conditions = NotNoneList()
@@ -17376,9 +17376,9 @@ class APIQueryV2VConverterServerMsg(object):
         self.userTags = OptionalList()
 
 
-APIQUERYV2VCONVERTERSERVERREPLY_FULL_NAME = 'org.zstack.v2v.APIQueryV2VConverterServerReply'
-class APIQueryV2VConverterServerReply(object):
-    FULL_NAME='org.zstack.v2v.APIQueryV2VConverterServerReply'
+APIQUERYV2VCONVERSIONHOSTREPLY_FULL_NAME = 'org.zstack.v2v.APIQueryV2VConversionHostReply'
+class APIQueryV2VConversionHostReply(object):
+    FULL_NAME='org.zstack.v2v.APIQueryV2VConversionHostReply'
     def __init__(self):
         self.inventories = OptionalList()
         self.total = None
@@ -17386,9 +17386,9 @@ class APIQueryV2VConverterServerReply(object):
         self.error = None
 
 
-APIUPDATEV2VCONVERTERSERVERMSG_FULL_NAME = 'org.zstack.v2v.APIUpdateV2VConverterServerMsg'
-class APIUpdateV2VConverterServerMsg(object):
-    FULL_NAME='org.zstack.v2v.APIUpdateV2VConverterServerMsg'
+APIUPDATEV2VCONVERSIONHOSTMSG_FULL_NAME = 'org.zstack.v2v.APIUpdateV2VConversionHostMsg'
+class APIUpdateV2VConversionHostMsg(object):
+    FULL_NAME='org.zstack.v2v.APIUpdateV2VConversionHostMsg'
     def __init__(self):
         #mandatory field
         self.uuid = NotNoneField()
@@ -18627,7 +18627,7 @@ api_names = [
     'APIAddSimulatorPrimaryStorageMsg',
     'APIAddStackTemplateMsg',
     'APIAddUserToGroupMsg',
-    'APIAddV2VConverterServerMsg',
+    'APIAddV2VConversionHostMsg',
     'APIAddVCenterMsg',
     'APIAddVRouterRouteEntryMsg',
     'APIAddVmNicToLoadBalancerMsg',
@@ -18920,7 +18920,7 @@ api_names = [
     'APIDeleteTicketMsg',
     'APIDeleteUserGroupMsg',
     'APIDeleteUserMsg',
-    'APIDeleteV2VConverterServerMsg',
+    'APIDeleteV2VConversionHostMsg',
     'APIDeleteVCenterMsg',
     'APIDeleteVRouterRouteEntryMsg',
     'APIDeleteVRouterRouteTableMsg',
@@ -19556,8 +19556,8 @@ api_names = [
     'APIQueryUserReply',
     'APIQueryUserTagMsg',
     'APIQueryUserTagReply',
-    'APIQueryV2VConverterServerMsg',
-    'APIQueryV2VConverterServerReply',
+    'APIQueryV2VConversionHostMsg',
+    'APIQueryV2VConversionHostReply',
     'APIQueryVCenterBackupStorageMsg',
     'APIQueryVCenterBackupStorageReply',
     'APIQueryVCenterClusterMsg',
@@ -19860,7 +19860,7 @@ api_names = [
     'APIUpdateUsbDeviceMsg',
     'APIUpdateUserGroupMsg',
     'APIUpdateUserMsg',
-    'APIUpdateV2VConverterServerMsg',
+    'APIUpdateV2VConversionHostMsg',
     'APIUpdateVCenterMsg',
     'APIUpdateVRouterRouteTableMsg',
     'APIUpdateVipMsg',
@@ -26610,7 +26610,7 @@ class UsbDeviceInventory(object):
 
 
 
-class V2VConverterServerInventory(object):
+class V2VConversionHostInventory(object):
     def __init__(self):
         self.uuid = None
         self.name = None
@@ -28411,6 +28411,13 @@ class QueryObjectIPsecConnectionInventory(object):
         'vip' : 'QueryObjectVipInventory',
     }
 
+class QueryObjectV2VConversionHostInventory(object):
+    PRIMITIVE_FIELDS = ['hostUuid','name','lastOpDate','description','storagePath','uuid','createDate', '__systemTag__', '__userTag__']
+    EXPANDED_FIELDS = ['host']
+    QUERY_OBJECT_MAP = {
+        'host' : 'QueryObjectHostInventory',
+    }
+
 class QueryObjectKVMHostInventory(object):
     PRIMITIVE_FIELDS = ['sshPort','clusterUuid','zoneUuid','availableCpuCapacity','description','hypervisorType','totalMemoryCapacity','uuid','cpuSockets','cpuNum','managementIp','name','lastOpDate','totalCpuCapacity','availableMemoryCapacity','state','username','status','createDate', '__systemTag__', '__userTag__']
     EXPANDED_FIELDS = ['cluster','vmInstance','zone']
@@ -28420,15 +28427,15 @@ class QueryObjectKVMHostInventory(object):
         'zone' : 'QueryObjectZoneInventory',
     }
 
-class QueryObjectAlarmLabelInventory(object):
-    PRIMITIVE_FIELDS = ['uuid','value','key','operator', '__systemTag__', '__userTag__']
+class QueryObjectAliyunNasMountTargetInventory(object):
+    PRIMITIVE_FIELDS = ['nasFileSystemUuid','accessGroupUuid','mountDomain','name','lastOpDate','description','type','uuid','status','createDate', '__systemTag__', '__userTag__']
     EXPANDED_FIELDS = []
     QUERY_OBJECT_MAP = {
 
     }
 
-class QueryObjectAliyunNasMountTargetInventory(object):
-    PRIMITIVE_FIELDS = ['nasFileSystemUuid','accessGroupUuid','mountDomain','name','lastOpDate','description','type','uuid','status','createDate', '__systemTag__', '__userTag__']
+class QueryObjectAlarmLabelInventory(object):
+    PRIMITIVE_FIELDS = ['uuid','value','key','operator', '__systemTag__', '__userTag__']
     EXPANDED_FIELDS = []
     QUERY_OBJECT_MAP = {
 
@@ -28558,19 +28565,19 @@ class QueryObjectPrimaryStorageClusterRefInventory(object):
         'primaryStorage' : 'QueryObjectPrimaryStorageInventory',
     }
 
+class QueryObjectIAM2VirtualIDRoleRefInventory(object):
+    PRIMITIVE_FIELDS = ['virtualIDUuid','lastOpDate','roleUuid','createDate', '__systemTag__', '__userTag__']
+    EXPANDED_FIELDS = ['roles','virtualIDs']
+    QUERY_OBJECT_MAP = {
+        'roles' : 'QueryObjectRoleInventory',
+        'virtualIDs' : 'QueryObjectIAM2VirtualIDInventory',
+    }
+
 class QueryObjectIAM2VirtualIDGroupInventory(object):
     PRIMITIVE_FIELDS = ['name','lastOpDate','description','state','uuid','projectUuid','createDate', '__systemTag__', '__userTag__']
     EXPANDED_FIELDS = ['attributes','roles','virtualIDs']
     QUERY_OBJECT_MAP = {
         'attributes' : 'QueryObjectIAM2VirtualIDGroupAttributeInventory',
-        'roles' : 'QueryObjectRoleInventory',
-        'virtualIDs' : 'QueryObjectIAM2VirtualIDInventory',
-    }
-
-class QueryObjectIAM2VirtualIDRoleRefInventory(object):
-    PRIMITIVE_FIELDS = ['virtualIDUuid','lastOpDate','roleUuid','createDate', '__systemTag__', '__userTag__']
-    EXPANDED_FIELDS = ['roles','virtualIDs']
-    QUERY_OBJECT_MAP = {
         'roles' : 'QueryObjectRoleInventory',
         'virtualIDs' : 'QueryObjectIAM2VirtualIDInventory',
     }
@@ -28611,13 +28618,6 @@ class QueryObjectL2VxlanNetworkPoolInventory(object):
         'cluster' : 'QueryObjectClusterInventory',
     }
 
-class QueryObjectImageCacheInventory(object):
-    PRIMITIVE_FIELDS = ['size','md5sum','lastOpDate','mediaType','id','state','primaryStorageUuid','imageUuid','installUrl','createDate', '__systemTag__', '__userTag__']
-    EXPANDED_FIELDS = []
-    QUERY_OBJECT_MAP = {
-
-    }
-
 class QueryObjectOssUploadPartsInventory(object):
     PRIMITIVE_FIELDS = ['total','uploadId','partSize','ossBucketUuid','lastOpDate','partNumber','eTag','fileKey','id','partCRC','createDate', '__systemTag__', '__userTag__']
     EXPANDED_FIELDS = []
@@ -28625,11 +28625,11 @@ class QueryObjectOssUploadPartsInventory(object):
 
     }
 
-class QueryObjectV2VConverterServerInventory(object):
-    PRIMITIVE_FIELDS = ['hostUuid','name','lastOpDate','description','storagePath','uuid','createDate', '__systemTag__', '__userTag__']
-    EXPANDED_FIELDS = ['host']
+class QueryObjectImageCacheInventory(object):
+    PRIMITIVE_FIELDS = ['size','md5sum','lastOpDate','mediaType','id','state','primaryStorageUuid','imageUuid','installUrl','createDate', '__systemTag__', '__userTag__']
+    EXPANDED_FIELDS = []
     QUERY_OBJECT_MAP = {
-        'host' : 'QueryObjectHostInventory',
+
     }
 
 class QueryObjectEcsSecurityGroupInventory(object):
@@ -29778,7 +29778,7 @@ queryMessageInventoryMap = {
     'APIQueryCertificateMsg' : QueryObjectCertificateInventory,
     'APIQuerySecurityGroupMsg' : QueryObjectSecurityGroupInventory,
     'APIQueryTicketMsg' : QueryObjectTicketInventory,
-    'APIQueryGCJobMsg' : QueryObjectGarbageCollectorInventory,
+    'APIQueryIAM2VirtualIDGroupAttributeMsg' : QueryObjectIAM2VirtualIDGroupAttributeInventory,
     'APIQueryAliyunEbsPrimaryStorageMsg' : QueryObjectAliyunEbsPrimaryStorageInventory,
     'APIQueryPciDeviceMsg' : QueryObjectPciDeviceInventory,
     'APIQueryEmailMediaMsg' : QueryObjectEmailMediaInventory,
@@ -29801,7 +29801,7 @@ queryMessageInventoryMap = {
     'APIQueryAliyunSnapshotFromLocalMsg' : QueryObjectAliyunSnapshotInventory,
     'APIQuerySharedBlockMsg' : QueryObjectSharedBlockInventory,
     'APIQueryVirtualRouterVRouterRouteTableRefMsg' : QueryObjectVirtualRouterVRouterRouteTableRefInventory,
-    'APIQueryV2VConverterServerMsg' : QueryObjectV2VConverterServerInventory,
+    'APIQueryImageMsg' : QueryObjectImageInventory,
     'APIQueryArchiveTicketMsg' : QueryObjectArchiveTicketInventory,
     'APIQueryHybridKeySecretMsg' : QueryObjectHybridAccountInventory,
     'APIQueryUserMsg' : QueryObjectUserInventory,
@@ -29898,11 +29898,11 @@ queryMessageInventoryMap = {
     'APIQueryDahoCloudConnectionMsg' : QueryObjectDahoCloudConnectionInventory,
     'APIQueryStackTemplateMsg' : QueryObjectStackTemplateInventory,
     'APIQueryVolumeBackupMsg' : QueryObjectVolumeBackupInventory,
-    'APIQueryQuotaMsg' : QueryObjectQuotaInventory,
+    'APIQueryVpcIkeConfigFromLocalMsg' : QueryObjectVpcVpnIkeConfigInventory,
     'APIQueryAccountResourceRefMsg' : QueryObjectAccountResourceRefInventory,
     'APIQuerySNSTopicSubscriberMsg' : QueryObjectSNSSubscriberInventory,
     'APIQueryNetworkServiceL3NetworkRefMsg' : QueryObjectNetworkServiceL3NetworkRefInventory,
-    'APIQueryVpcIkeConfigFromLocalMsg' : QueryObjectVpcVpnIkeConfigInventory,
+    'APIQueryV2VConversionHostMsg' : QueryObjectV2VConversionHostInventory,
     'APIQueryPrimaryStorageMsg' : QueryObjectPrimaryStorageInventory,
     'APIQueryVmNicInSecurityGroupMsg' : QueryObjectVmNicSecurityGroupRefInventory,
     'APIQueryPciDeviceOfferingMsg' : QueryObjectPciDeviceOfferingInventory,
@@ -29910,11 +29910,11 @@ queryMessageInventoryMap = {
     'APIQueryIAM2ProjectAttributeMsg' : QueryObjectIAM2ProjectAttributeInventory,
     'APIQueryMediaMsg' : QueryObjectMediaInventory,
     'APIQueryEmailTriggerActionMsg' : QueryObjectEmailTriggerActionInventory,
-    'APIQueryImageMsg' : QueryObjectImageInventory,
+    'APIQueryGCJobMsg' : QueryObjectGarbageCollectorInventory,
     'APIQueryVtepMsg' : QueryObjectVtepInventory,
     'APIQueryVirtualRouterOfferingMsg' : QueryObjectVirtualRouterOfferingInventory,
     'APIQuerySNSHttpEndpointMsg' : QueryObjectSNSHttpEndpointInventory,
-    'APIQueryIAM2VirtualIDGroupAttributeMsg' : QueryObjectIAM2VirtualIDGroupAttributeInventory,
+    'APIQueryQuotaMsg' : QueryObjectQuotaInventory,
     'APIQueryVirtualRouterVmMsg' : QueryObjectVirtualRouterVmInventory,
     'APIQuerySNSTextTemplateMsg' : QueryObjectSNSTextTemplateInventory,
     'APIQueryGlobalConfigMsg' : QueryObjectGlobalConfigInventory,
