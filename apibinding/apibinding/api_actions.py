@@ -1598,6 +1598,18 @@ class ChangeTicketStatusAction(inventory.APIChangeTicketStatusMsg):
         self.out = evt
         return self.out
 
+class ChangeV2VConversionHostStateAction(inventory.APIChangeV2VConversionHostStateMsg):
+    def __init__(self):
+        super(ChangeV2VConversionHostStateAction, self).__init__()
+        self.sessionUuid = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[ChangeV2VConversionHostStateAction] cannot be None')
+        evt = api.async_call(self, self.sessionUuid)
+        self.out = evt
+        return self.out
+
 class ChangeVipStateAction(inventory.APIChangeVipStateMsg):
     def __init__(self):
         super(ChangeVipStateAction, self).__init__()
