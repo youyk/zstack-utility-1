@@ -14,15 +14,17 @@ class AgentRsp(object):
         self.success = True
         self.error = None
 
-class VMwareV2VConverter(kvmagent.KvmAgent):
-    INIT_PATH = "/vmware_v2v_converter/init"
-    CONVERT_PATH = "/vmware_v2v_converter/convert"
-    CLEAN_PATH = "/vmware_v2v_converter/clean"
+class VMwareV2VPlugin(kvmagent.KvmAgent):
+    INIT_PATH = "/vmwarev2v/conversionhost/init"
+    CONVERT_PATH = "/vmwarev2v/conversionhost/convert"
+    UPLOAD_PATH = "/vmwarev2v/conversionhost/upload"
+    CLEAN_PATH = "/vmwarev2v/conversionhost/clean"
     
     def start(self):
         http_server = kvmagent.get_http_server()
         http_server.register_sync_uri(self.INIT_PATH, self.init)
         http_server.register_sync_uri(self.CONVERT_PATH, self.convert)
+        http_server.register_sync_uri(self.UPLOAD_PATH, self.upload)
         http_server.register_sync_uri(self.CLEAN_PATH, self.clean)
 
     @in_bash
@@ -57,6 +59,12 @@ class VMwareV2VConverter(kvmagent.KvmAgent):
     @in_bash
     @kvmagent.replyerror
     def convert(self, cmd):
+        rsp = kvmagent.AgentResponse()
+        return jsonobject.dumps(rsp)
+
+    @in_bash
+    @kvmagent.replyerror
+    def upload(self, cmd):
         rsp = kvmagent.AgentResponse()
         return jsonobject.dumps(rsp)
 
