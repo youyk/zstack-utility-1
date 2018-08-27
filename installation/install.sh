@@ -1631,6 +1631,8 @@ iz_install_zstackcli(){
     if [ $? -ne 0 ];then
        fail "failed to install zstackcli in $ZSTACK_INSTALL_ROOT/$ZSTACK_TOOLS_INSTALLER"
     fi
+
+    bash $ZSTACK_INSTALL_ROOT/$CATALINA_ZSTACK_CLASSES/ansible/imagestorebackupstorage/zstack-store.bin >>$ZSTACK_INSTALL_LOG 2>&1
     pass
 }
 
