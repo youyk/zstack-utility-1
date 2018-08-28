@@ -1472,6 +1472,9 @@ uz_upgrade_zstack(){
         fail "failed to upgrade zstack-cli"
     fi
 
+    bash ${zstore_bin} >>$ZSTACK_INSTALL_LOG 2>&1
+    chown -R zstack.zstack $ZSTACK_INSTALL_ROOT/imagestore >/dev/null 2>&1
+
     if [ ! -z $DEBUG ]; then
         zstack-ctl upgrade_management_node --war-file $upgrade_folder/zstack.war 
     else
@@ -1633,6 +1636,7 @@ iz_install_zstackcli(){
     fi
 
     bash ${zstore_bin} >>$ZSTACK_INSTALL_LOG 2>&1
+    chown -R zstack.zstack $ZSTACK_INSTALL_ROOT/imagestore >/dev/null 2>&1
     pass
 }
 
