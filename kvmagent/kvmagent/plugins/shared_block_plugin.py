@@ -217,6 +217,7 @@ class SharedBlockPlugin(kvmagent.KvmAgent):
     ADD_SHARED_BLOCK = "/sharedblock/disks/add"
     MIGRATE_DATA_PATH = "/sharedblock/volume/migrate"
     GET_BLOCK_DEVICES_PATH = "/sharedblock/blockdevices"
+    DOWNLOAD_BITS_FROM_KVM_HOST_PATH = "/sharedblock/kvmhost/download"
 
     def start(self):
         http_server = kvmagent.get_http_server()
@@ -243,6 +244,7 @@ class SharedBlockPlugin(kvmagent.KvmAgent):
         http_server.register_async_uri(self.ADD_SHARED_BLOCK, self.add_disk)
         http_server.register_async_uri(self.MIGRATE_DATA_PATH, self.migrate_volumes)
         http_server.register_async_uri(self.GET_BLOCK_DEVICES_PATH, self.get_block_devices)
+        http_server.register_async_uri(self.DOWNLOAD_BITS_FROM_KVM_HOST_PATH, self.download_from_kvmhost)
 
         self.imagestore_client = ImageStoreClient()
 
@@ -513,6 +515,10 @@ class SharedBlockPlugin(kvmagent.KvmAgent):
 
         rsp.totalCapacity, rsp.availableCapacity = lvm.get_vg_size(cmd.vgUuid)
         return jsonobject.dumps(rsp)
+
+    @kvmagent.replyerror
+    def download_from_kvmhost(self, req):
+        return self.download_from_sftp(req)
 
     @kvmagent.replyerror
     def upload_to_imagestore(self, req):
