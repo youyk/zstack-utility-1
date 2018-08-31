@@ -34,7 +34,7 @@ class VMwareV2VPlugin(kvmagent.KvmAgent):
     def init(self, req):
         cmd = jsonobject.loads(req[http.REQUEST_BODY])
         rsp = kvmagent.AgentResponse()
-        cmdstr = 'which docker || yum --disablerepo=* --enablerepo={} install docker'.format(cmd.zstackRepo)
+        cmdstr = 'which docker || yum --disablerepo=* --enablerepo={} install docker -y'.format(cmd.zstackRepo)
         if shell.run(cmdstr) != 0:
             rsp.success = False
             rsp.error = "failed to install docker in conversion host"
