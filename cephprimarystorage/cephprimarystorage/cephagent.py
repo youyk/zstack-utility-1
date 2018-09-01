@@ -676,7 +676,7 @@ class CephAgent(object):
 
         try:
             shell.call(
-                'set -o pipefail; ssh -p %d -o StrictHostKeyChecking=no -i %s root@%s "cat '%s'" | rbd import --image-format 2 - %s/%s' %
+                'set -o pipefail; ssh -p %d -o StrictHostKeyChecking=no -i %s root@%s "cat \'%s\'" | rbd import --image-format 2 - %s/%s' %
                 (port, prikey_file, hostname, cmd.backupStorageInstallPath, pool, tmp_image_name))
         finally:
             os.remove(prikey_file)
