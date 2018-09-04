@@ -1,3 +1,6 @@
+import os
+import json
+import commands
 import traceback
 
 from kvmagent import kvmagent
@@ -15,11 +18,16 @@ class AgentRsp(object):
         self.success = True
         self.error = None
 
+class ConvertRsp(AgentRsp):
+    def __init__(self):
+        self.rootVolumeSize = None
+        self.dataVolumeSizes = []
+
 class VMwareV2VPlugin(kvmagent.KvmAgent):
     INIT_PATH = "/vmwarev2v/conversionhost/init"
     CONVERT_PATH = "/vmwarev2v/conversionhost/convert"
     CLEAN_PATH = "/vmwarev2v/conversionhost/clean"
-    
+
     def start(self):
         http_server = kvmagent.get_http_server()
         http_server.register_async_uri(self.INIT_PATH, self.init)
@@ -33,7 +41,7 @@ class VMwareV2VPlugin(kvmagent.KvmAgent):
     @kvmagent.replyerror
     def init(self, req):
         cmd = jsonobject.loads(req[http.REQUEST_BODY])
-        rsp = kvmagent.AgentResponse()
+        rsp = AgentRsp()
         cmdstr = 'which docker || yum --disablerepo=* --enablerepo={} install docker -y'.format(cmd.zstackRepo)
         if shell.run(cmdstr) != 0:
             rsp.success = False
@@ -68,7 +76,7 @@ class VMwareV2VPlugin(kvmagent.KvmAgent):
     @kvmagent.replyerror
     def convert(self, req):
         cmd = jsonobject.loads(req[http.REQUEST_BODY])
-        rsp = kvmagent.AgentResponse()
+        rsp = ConvertRsp()
         storagePath = '{}/{}'.format(cmd.storagePath, cmd.dstVmUuid)
         cmdstr = "mkdir -p {0} && echo '{1}' > {0}/passwd".format(storagePath, cmd.vCenterPassword)
         if shell.run(cmdstr) != 0:
@@ -76,20 +84,39 @@ class VMwareV2VPlugin(kvmagent.KvmAgent):
             rsp.error = "failed to create storagePath {} in v2v conversion host[hostUuid:{}]".format(storagePath, cmd.hostUuid)
             return jsonobject.dumps(rsp)
 
-        virt_v2v_cmd = 'virt-v2v -ic vpx://{0}?no_verify=1 "{1}" -o local -os {2} --password-file {2}/passwd -of qcow2 --compress > {2}/virt_v2v_log 2>&1'.format(cmd.srcVmUri, cmd.srcVmName, storagePath)
+        virt_v2v_cmd = 'virt-v2v -v -x -ic vpx://{0}?no_verify=1 "{1}" -o local -os {2} --password-file {2}/passwd -of qcow2 --compress > {2}/virt_v2v_log 2>&1'.format(cmd.srcVmUri, cmd.srcVmName, storagePath)
         docker_run_cmd = 'docker run --rm -v /usr/local/zstack:/usr/local/zstack -v {0}:{0} --env VIRTIO_WIN=/usr/local/zstack/zstack-windows-virtio-driver.iso zs_virt_v2v {1}'.format(cmd.storagePath, virt_v2v_cmd)
         if shell.run(docker_run_cmd) != 0:
             rsp.success = False
             rsp.error = "failed to run virt-v2v command: " + docker_run_cmd
             return jsonobject.dumps(rsp)
 
+        rootVol = r"%s/%s-sda" % (storagePath, cmd.srcVmName)
+        if not os.path.exists(rootVol):
+            rsp.success = False
+            rsp.error = "failed to convert root volume of " + cmd.srcVmName
+            return jsonobject.dumps(rsp)
+        rsp.rootVolumeSize = self._get_qcow2_virtual_size(rootVol)
+
+        for dev in 'bcdefghijklmnopqrstuvwxyz':
+            dataVol = r"%s/%s-sd%c" % (storagePath, cmd.srcVmName, dev)
+            if os.path.exists(dataVol):
+                rsp.dataVolumeSizes.append(self._get_qcow2_virtual_size(dataVol))
+            else:
+                break
         return jsonobject.dumps(rsp)
+
+    @in_bash
+    def _get_qcow2_virtual_size(self, path):
+        cmd = "qemu-img info --output=json " + path
+        _, output = commands.getstatusoutput(cmd)
+        return long(json.loads(output)['virtual-size'])
 
     @in_bash
     @kvmagent.replyerror
     def clean(self, req):
         cmd = jsonobject.loads(req[http.REQUEST_BODY])
-        rsp = kvmagent.AgentResponse()
+        rsp = AgentRsp()
         if not cmd.dstVmUuid:
             cleanUpPath = cmd.storagePath
         else:

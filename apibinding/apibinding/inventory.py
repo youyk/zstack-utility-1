@@ -17347,8 +17347,6 @@ class APIConvertVmFromForeignHypervisorMsg(object):
         #mandatory field
         self.primaryStorageUuid = NotNoneField()
         #mandatory field
-        self.volumeSizes = NotNoneList()
-        #mandatory field
         self.l3NetworkUuids = NotNoneList()
         self.defaultL3NetworkUuid = None
         #valid values: [Linux, Windows, WindowsVirtio, Paravirtualization, Other]
