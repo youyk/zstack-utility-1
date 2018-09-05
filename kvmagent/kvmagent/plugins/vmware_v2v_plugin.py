@@ -84,8 +84,18 @@ class VMwareV2VPlugin(kvmagent.KvmAgent):
             rsp.error = "failed to create storagePath {} in v2v conversion host[hostUuid:{}]".format(storagePath, cmd.hostUuid)
             return jsonobject.dumps(rsp)
 
-        virt_v2v_cmd = 'virt-v2v -v -x -ic vpx://{0}?no_verify=1 "{1}" -o local -os {2} --password-file {2}/passwd -of qcow2 --compress > {2}/virt_v2v_log 2>&1'.format(cmd.srcVmUri, cmd.srcVmName, storagePath)
-        docker_run_cmd = 'docker run --rm -v /usr/local/zstack:/usr/local/zstack -v {0}:{0} --env VIRTIO_WIN=/usr/local/zstack/zstack-windows-virtio-driver.iso zs_virt_v2v {1}'.format(cmd.storagePath, virt_v2v_cmd)
+        virt_v2v_cmd = 'virt-v2v -v -x \
+                -ic vpx://{0}?no_verify=1 "{1}" \
+                -it vddk \
+                --vddk-libdir=/home/v2v/vmware-vix-disklib-distrib \
+                --vddk-thumbprint={3}    \
+                -o local -os {2} \
+                --password-file {2}/passwd \
+                -of qcow2 --compress > {2}/virt_v2v_log 2>&1'.format(cmd.srcVmUri, cmd.srcVmName, storagePath, cmd.thumbprint)
+        docker_run_cmd = 'systemctl start docker && docker run --rm -v /usr/local/zstack:/usr/local/zstack -v {0}:{0} \
+                -e VIRTIO_WIN=/usr/local/zstack/zstack-windows-virtio-driver.iso \
+                -e PATH=/home/v2v/nbdkit:$PATH \
+                zs_virt_v2v {1}'.format(cmd.storagePath, virt_v2v_cmd)
         if shell.run(docker_run_cmd) != 0:
             rsp.success = False
             rsp.error = "failed to run virt-v2v command: " + docker_run_cmd
