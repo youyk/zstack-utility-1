@@ -27812,8 +27812,10 @@ class GlobalConfig_TWOFA(object):
         return 'twofa'
 
 class GlobalConfig_V2V(object):
+    V2V_WINVIRTIODRIVERISOPATH = 'v2v.winVirtioDriverIsoPath'
     V2V_HOSTALLOCATORSTRATEGY = 'v2v.hostAllocatorStrategy'
     V2V_PARALLELISMDEGREE = 'v2v.parallelismDegree'
+    V2V_VIRTV2VDOCKERIMAGEPATH = 'v2v.virtv2vDockerImagePath'
 
     @staticmethod
     def get_category():
