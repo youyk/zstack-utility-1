@@ -5854,6 +5854,21 @@ class APICheckResourcePermissionMsg(object):
         self.systemTags = OptionalList()
         self.userTags = OptionalList()
 
+APICREATEACCESSKEYMSG_FULL_NAME = 'org.zstack.header.identity.APICreateAccessKeyMsg'
+class APICreateAccessKeyMsg(object):
+    FULL_NAME='org.zstack.header.identity.APICreateAccessKeyMsg'
+    def __init__(self):
+        #mandatory field
+        self.accountUuid = NotNoneField()
+        #mandatory field
+        self.userUuid = NotNoneField()
+        self.description = None
+        self.resourceUuid = None
+        self.session = None
+        self.timeout = None
+        self.systemTags = OptionalList()
+        self.userTags = OptionalList()
+
 
 APICHECKRESOURCEPERMISSIONREPLY_FULL_NAME = 'org.zstack.header.identity.APICheckResourcePermissionReply'
 class APICheckResourcePermissionReply(object):
@@ -19159,6 +19174,7 @@ api_names = [
     'APICloneEcsInstanceFromLocalVmMsg',
     'APICloneVmInstanceMsg',
     'APICommitVolumeAsImageMsg',
+    'APICreateAccessKeyMsg',
     'APICreateAccountMsg',
     'APICreateAffinityGroupMsg',
     'APICreateAlarmMsg',
@@ -24243,6 +24259,60 @@ class VpcVpnIpSecConfigStruct(object):
             self.IpsecLifetime = inv.IpsecLifetime
         else:
             self.IpsecLifetime = None
+
+
+
+class AccessKeyInventory(object):
+    def __init__(self):
+        self.uuid = None
+        self.description = None
+        self.accountUuid = None
+        self.userUuid = None
+        self.AccessKeyID = None
+        self.AccessKeySecret = None
+        self.createDate = None
+        self.lastOpDate = None
+
+    def evaluate(self, inv):
+        if hasattr(inv, 'uuid'):
+            self.uuid = inv.uuid
+        else:
+            self.uuid = None
+
+        if hasattr(inv, 'description'):
+            self.description = inv.description
+        else:
+            self.description = None
+
+        if hasattr(inv, 'accountUuid'):
+            self.accountUuid = inv.accountUuid
+        else:
+            self.accountUuid = None
+
+        if hasattr(inv, 'userUuid'):
+            self.userUuid = inv.userUuid
+        else:
+            self.userUuid = None
+
+        if hasattr(inv, 'AccessKeyID'):
+            self.AccessKeyID = inv.AccessKeyID
+        else:
+            self.AccessKeyID = None
+
+        if hasattr(inv, 'AccessKeySecret'):
+            self.AccessKeySecret = inv.AccessKeySecret
+        else:
+            self.AccessKeySecret = None
+
+        if hasattr(inv, 'createDate'):
+            self.createDate = inv.createDate
+        else:
+            self.createDate = None
+
+        if hasattr(inv, 'lastOpDate'):
+            self.lastOpDate = inv.lastOpDate
+        else:
+            self.lastOpDate = None
 
 
 
@@ -29803,6 +29873,13 @@ class QueryObjectAccountInventory(object):
 
 class QueryObjectAliyunNasFileSystemInventory(object):
     PRIMITIVE_FIELDS = ['protocol','fileSystemId','name','lastOpDate','dataCenterUuid','storageType','description','type','uuid','createDate', '__systemTag__', '__userTag__']
+    EXPANDED_FIELDS = []
+    QUERY_OBJECT_MAP = {
+
+    }
+
+class QueryObjectAccessKeyInventory(object):
+    PRIMITIVE_FIELDS = ['AccessKeyID','AccessKeySecret','userUuid','lastOpDate','description','accountUuid','uuid','createDate', '__systemTag__', '__userTag__']
     EXPANDED_FIELDS = []
     QUERY_OBJECT_MAP = {
 

@@ -1802,6 +1802,18 @@ class CommitVolumeAsImageAction(inventory.APICommitVolumeAsImageMsg):
         self.out = evt
         return self.out
 
+class CreateAccessKeyAction(inventory.APICreateAccessKeyMsg):
+    def __init__(self):
+        super(CreateAccessKeyAction, self).__init__()
+        self.sessionUuid = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[CreateAccessKeyAction] cannot be None')
+        evt = api.async_call(self, self.sessionUuid)
+        self.out = evt
+        return self.out
+
 class CreateAccountAction(inventory.APICreateAccountMsg):
     def __init__(self):
         super(CreateAccountAction, self).__init__()
