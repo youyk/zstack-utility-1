@@ -27,12 +27,16 @@ class VMwareV2VPlugin(kvmagent.KvmAgent):
     INIT_PATH = "/vmwarev2v/conversionhost/init"
     CONVERT_PATH = "/vmwarev2v/conversionhost/convert"
     CLEAN_PATH = "/vmwarev2v/conversionhost/clean"
+    CONFIG_QOS_PATH = "/vmwarev2v/conversionhost/qos/config"
+    DELETE_QOS_PATH = "/vmwarev2v/conversionhost/qos/delete"
 
     def start(self):
         http_server = kvmagent.get_http_server()
         http_server.register_async_uri(self.INIT_PATH, self.init)
         http_server.register_async_uri(self.CONVERT_PATH, self.convert)
         http_server.register_async_uri(self.CLEAN_PATH, self.clean)
+        http_server.register_async_uri(self.CONFIG_QOS_PATH, self.config_qos)
+        http_server.register_async_uri(self.DELETE_QOS_PATH, self.delete_qos)
 
     def stop(self):
         pass
@@ -132,5 +136,23 @@ class VMwareV2VPlugin(kvmagent.KvmAgent):
         else:
             cleanUpPath = '{}/{}'.format(cmd.storagePath, cmd.dstVmUuid)
         cmdstr = "/bin/rm -rf " + cleanUpPath
+        shell.run(cmdstr)
+        return jsonobject.dumps(rsp)
+
+    @in_bash
+    @kvmagent.replyerror
+    def config_qos(self, req):
+        cmd = jsonobject.loads(req[http.REQUEST_BODY])
+        rsp = AgentRsp()
+        cmdstr = "tc qdisc del dev docker0 root >/dev/null 2>&1; tc qdisc add dev docker0 root tbf rate %sbit latency 10ms burst 100m" % cmd.inboundBandwidth
+        shell.run(cmdstr)
+        return jsonobject.dumps(rsp)
+
+    @in_bash
+    @kvmagent.replyerror
+    def delete_qos(self, req):
+        cmd = jsonobject.loads(req[http.REQUEST_BODY])
+        rsp = AgentRsp()
+        cmdstr = "tc qdisc del dev docker0 root >/dev/null 2>&1"
         shell.run(cmdstr)
         return jsonobject.dumps(rsp)
