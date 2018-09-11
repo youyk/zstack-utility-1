@@ -9608,6 +9608,18 @@ class RequestConsoleAccessAction(inventory.APIRequestConsoleAccessMsg):
         self.out = evt
         return self.out
 
+class RerunLongJobAction(inventory.APIRerunLongJobMsg):
+    def __init__(self):
+        super(RerunLongJobAction, self).__init__()
+        self.sessionUuid = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[RerunLongJobAction] cannot be None')
+        evt = api.async_call(self, self.sessionUuid)
+        self.out = evt
+        return self.out
+
 class ResizeDataVolumeAction(inventory.APIResizeDataVolumeMsg):
     def __init__(self):
         super(ResizeDataVolumeAction, self).__init__()
