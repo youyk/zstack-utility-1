@@ -18,70 +18,17 @@ from zstacklib.utils.bash import *
 
 logger = log.get_logger(__name__)
 
-class PingEBSRsp(kvmagent.AgentResponse):
-    def __init__(self):
-        super(PingEBSRsp, self).__init__()
-        self.echo = None
+tdcversion = 1
 
 class AliyunEbsStoragePlugin(kvmagent.KvmAgent):
-    INIT_PATH = "/aliyun/ebs/primarystorage/init"
-    ECHO_PATH = "/aliyun/ebs/primarystorage/echo"
-    PING_PATH = "/aliyun/ebs/primarystorage/ping"
-    GET_FACTS = "/aliyun/ebs/primarystorage/facts"
-    DELETE_IMAGE_CACHE = "/aliyun/ebs/primarystorage/deleteimagecache"
-
-    CREATE_VOLUME_PATH = "/aliyun/ebs/primarystorage/volume/createempty"
-    DELETE_PATH = "/aliyun/ebs/primarystorage/volume/delete"
-    CLONE_PATH = "/aliyun/ebs/primarystorage/volume/clone"
-    FLATTEN_PATH = "/aliyun/ebs/primarystorage/volume/flatten"
-    PURGE_SNAPSHOT_PATH = "/aliyun/ebs/primarystorage/volume/purgesnapshots"
-    CP_PATH = "/aliyun/ebs/primarystorage/volume/cp"
-    GET_VOLUME_SIZE_PATH = "/aliyun/ebs/primarystorage/volume/getsize"
-    RESIZE_VOLUME_PATH = "/aliyun/ebs/primarystorage/volume/resize"
-    MIGRATE_VOLUME_PATH = "/aliyun/ebs/primarystorage/volume/migrate"
-    MIGRATE_VOLUME_SNAPSHOT_PATH = "/aliyun/ebs/primarystorage/volume/snapshot/migrate"
-    GET_VOLUME_SNAPINFOS_PATH = "/aliyun/ebs/primarystorage/volume/getsnapinfos"
-
-    CREATE_SNAPSHOT_PATH = "/aliyun/ebs/primarystorage/snapshot/create"
-    DELETE_SNAPSHOT_PATH = "/aliyun/ebs/primarystorage/snapshot/delete"
-    COMMIT_IMAGE_PATH = "/aliyun/ebs/primarystorage/snapshot/commit"
-    PROTECT_SNAPSHOT_PATH = "/aliyun/ebs/primarystorage/snapshot/protect"
-    ROLLBACK_SNAPSHOT_PATH = "/aliyun/ebs/primarystorage/snapshot/rollback"
-    UNPROTECT_SNAPSHOT_PATH = "/aliyun/ebs/primarystorage/snapshot/unprotect"
-    CHECK_BITS_PATH = "/aliyun/ebs/primarystorage/snapshot/checkbits"
-
-    UPLOAD_IMAGESTORE_PATH = "/aliyun/ebs/primarystorage/imagestore/backupstorage/commit"
-    DOWNLOAD_IMAGESTORE_PATH = "/aliyun/ebs/primarystorage/imagestore/backupstorage/download"
+    INSTALL_TDC_PATH = "/aliyun/ebs/primarystorage/installtdc"
+    DETACH_VOLUME_PATH = "/aliyun/ebs/primarystorage/detachvolume"
 
     def start(self):
         http_server = kvmagent.get_http_server()
-        # http_server.register_async_uri(self.INIT_PATH, self.init)
-        # http_server.register_async_uri(self.DELETE_PATH, self.delete)
-        # http_server.register_async_uri(self.CREATE_VOLUME_PATH, self.create)
-        # http_server.register_async_uri(self.CLONE_PATH, self.clone)
-        # http_server.register_async_uri(self.COMMIT_IMAGE_PATH, self.commit_image)
-        # http_server.register_async_uri(self.CREATE_SNAPSHOT_PATH, self.create_snapshot)
-        # http_server.register_async_uri(self.DELETE_SNAPSHOT_PATH, self.delete_snapshot)
-        # http_server.register_async_uri(self.PURGE_SNAPSHOT_PATH, self.purge_snapshots)
-        # http_server.register_async_uri(self.PROTECT_SNAPSHOT_PATH, self.protect_snapshot)
-        # http_server.register_async_uri(self.UNPROTECT_SNAPSHOT_PATH, self.unprotect_snapshot)
-        # http_server.register_async_uri(self.ROLLBACK_SNAPSHOT_PATH, self.rollback_snapshot)
-        # http_server.register_async_uri(self.FLATTEN_PATH, self.flatten)
-        # http_server.register_async_uri(self.CP_PATH, self.cp)
-        # http_server.register_async_uri(self.UPLOAD_IMAGESTORE_PATH, self.upload_imagestore)
-        # http_server.register_async_uri(self.DOWNLOAD_IMAGESTORE_PATH, self.download_imagestore)
-        # http_server.register_async_uri(self.GET_VOLUME_SIZE_PATH, self.get_volume_size)
-        # http_server.register_async_uri(self.PING_PATH, self.ping)
-        # http_server.register_async_uri(self.GET_FACTS, self.get_facts)
-        # http_server.register_async_uri(self.DELETE_IMAGE_CACHE, self.delete_image_cache)
-        # http_server.register_async_uri(self.CHECK_BITS_PATH, self.check_bits)
-        # http_server.register_async_uri(self.RESIZE_VOLUME_PATH, self.resize_volume)
-        # http_server.register_sync_uri(self.ECHO_PATH, self.echo)
-        # http_server.register_async_uri(self.MIGRATE_VOLUME_PATH, self.migrate_volume)
-        # http_server.register_async_uri(self.MIGRATE_VOLUME_SNAPSHOT_PATH, self.migrate_volume_snapshot)
-        # http_server.register_async_uri(self.GET_VOLUME_SNAPINFOS_PATH, self.get_volume_snapinfos)
+        http_server.register_async_uri(self.INSTALL_TDC_PATH, self.installtdc)
+        http_server.register_async_uri(self.DETACH_VOLUME_PATH, self.detachvolume)
 
-        self.image_cache = None
         self.imagestore_client = ImageStoreClient()
 
     def stop(self):
@@ -93,10 +40,42 @@ class AliyunEbsStoragePlugin(kvmagent.KvmAgent):
         return ''
 
     @kvmagent.replyerror
-    def ping(self, req):
-        logger.debug('ping river master')
-        rsp = PingEBSRsp()
+    def installtdc(self, req):
+        logger.debug('install tdc pkg')
+        rsp = kvmagent.AgentResponse()
         cmd = jsonobject.loads(req[http.REQUEST_BODY])
-        ret = http.json_post(cmd.uri, body=cmd.body)
-        rsp.echo = ret.echo
+        if cmd.version != tdcversion:
+            rsp.error = "no matched tdc version found, agent need version %d" % tdcversion
+        else:
+            s = shell.ShellCmd("/opt/tdc/tdc_admin gtv")
+            s(False)
+            if s.return_code == 0:
+                return jsonobject.dumps(rsp)
+            yum_cmd = "yum --enablerepo=zstack-mn,qemu-kvm-ev-mn clean metadata"
+            shell.call(yum_cmd)
+            yum_cmd = "yum --disablerepo=* --enablerepo=zstack-mn,qemu-kvm-ev-mn install -y kernel-devel-3.10.0-693.11.1.el7.x86_64"
+            shell.call(yum_cmd)
+            yum_cmd = "yum --disablerepo=* --enablerepo=zstack-mn,qemu-kvm-ev-mn install -y tdc-unified-8.2.0.release.el5.x86_64"
+            shell.call(yum_cmd)
+            linux.mkdir("/apsara", 0755)
+            shell.call("service tdc start")
+            s = shell.ShellCmd("/opt/tdc/tdc_admin lsi")
+            s(False)
+            if s.return_code != 0:
+                rsp.success = False
+                rsp.error = "tdc_admin lsi failed: %s" % s.stderr
+
+        return jsonobject.dumps(rsp)
+
+    @kvmagent.replyerror
+    def detachvolume(self, req):
+        cmd = jsonobject.loads(req[http.REQUEST_BODY])
+        logger.debug('detach volume %d' % cmd.volumeId)
+        rsp = kvmagent.AgentResponse()
+        s = shell.ShellCmd("/opt/tdc/tdc_admin destroy-vrbd --device_id=%d" % cmd.volumeId)
+        s(False)
+        if s.return_code != 0:
+            rsp.success = False
+            rsp.error = "detach volume failed: %s" % s.stderr
+
         return jsonobject.dumps(rsp)
