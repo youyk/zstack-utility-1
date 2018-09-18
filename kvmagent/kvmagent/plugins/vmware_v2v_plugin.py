@@ -20,8 +20,11 @@ class AgentRsp(object):
 
 class ConvertRsp(AgentRsp):
     def __init__(self):
-        self.rootVolumeSize = None
-        self.dataVolumeSizes = []
+        self.rootVolumeActualSize = None
+        self.rootVolumeVirtualSize = None
+        self.dataVolumeActualSizes = []
+        self.dataVolumeVirtualSizes = []
+        self.bootMode = None
 
 class VMwareV2VPlugin(kvmagent.KvmAgent):
     INIT_PATH = "/vmwarev2v/conversionhost/init"
@@ -110,21 +113,23 @@ class VMwareV2VPlugin(kvmagent.KvmAgent):
             rsp.success = False
             rsp.error = "failed to convert root volume of " + cmd.srcVmName
             return jsonobject.dumps(rsp)
-        rsp.rootVolumeSize = self._get_qcow2_virtual_size(rootVol)
+        rsp.rootVolumeActualSize, rsp.rootVolumeVirtualSize = self._get_qcow2_sizes(rootVol)
 
         for dev in 'bcdefghijklmnopqrstuvwxyz':
             dataVol = r"%s/%s-sd%c" % (storagePath, cmd.srcVmName, dev)
             if os.path.exists(dataVol):
-                rsp.dataVolumeSizes.append(self._get_qcow2_virtual_size(dataVol))
+                aSize, vSize = self._get_qcow2_sizes(dataVol)
+                rsp.dataVolumeActualSizes.append(aSize)
+                rsp.dataVolumeVirtualSizes.append(vSize)
             else:
                 break
         return jsonobject.dumps(rsp)
 
     @in_bash
-    def _get_qcow2_virtual_size(self, path):
+    def _get_qcow2_sizes(self, path):
         cmd = "qemu-img info --output=json " + path
         _, output = commands.getstatusoutput(cmd)
-        return long(json.loads(output)['virtual-size'])
+        return long(json.loads(output)['actual-size']), long(json.loads(output)['virtual-size'])
 
     @in_bash
     @kvmagent.replyerror

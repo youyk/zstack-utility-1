@@ -502,8 +502,8 @@ class SharedBlockPlugin(kvmagent.KvmAgent):
         rsp = AgentRsp()
         install_abs_path = translate_absolute_path_from_install_path(cmd.primaryStorageInstallPath)
 
-        size = linux.sftp_get(cmd.hostname, cmd.sshKey, cmd.backupStorageInstallPath, install_abs_path, cmd.username, cmd.sshPort, True)
         if not lvm.lv_exists(install_abs_path):
+            size = linux.sftp_get(cmd.hostname, cmd.sshKey, cmd.backupStorageInstallPath, install_abs_path, cmd.username, cmd.sshPort, True)
             lvm.create_lv_from_absolute_path(install_abs_path, size,
                                              "%s::%s::%s" % (VOLUME_TAG, cmd.hostUuid, time.time()))
 
