@@ -142,6 +142,8 @@ class DhcpEnv(object):
         self.dhcp_server_ip = None
         self.dhcp_netmask = None
         self.namespace_name = None
+        self.ipVersion = 0
+        self.prefixLen = 0
 
 
     @lock.lock('prepare_dhcp_namespace')
@@ -166,6 +168,10 @@ class DhcpEnv(object):
         BR_NAME = self.bridge_name
         DHCP_IP = self.dhcp_server_ip
         DHCP_NETMASK = self.dhcp_netmask
+        PREFIX_LEN = self.prefixLen
+        if self.ipVersion == 4:
+            PREFIX_LEN = linux.netmask_to_cidr(DHCP_NETMASK)
+
         BR_PHY_DEV = self.bridge_name.replace('br_', '', 1).replace('_', '.', 1)
         OUTER_DEV = "outer%s" % NAMESPACE_ID
         INNER_DEV = "inner%s" % NAMESPACE_ID
@@ -197,14 +203,17 @@ class DhcpEnv(object):
             bash_errorout('ip link set {{INNER_DEV}} netns {{NAMESPACE_NAME}}')
 
         ret = bash_r('ip netns exec {{NAMESPACE_NAME}} ip addr show {{INNER_DEV}} | grep -w {{DHCP_IP}} > /dev/null')
-        if ret != 0 and DHCP_IP != None and DHCP_NETMASK != None:
+        if ret != 0 and DHCP_IP != None and (DHCP_NETMASK != None or self.prefixLen != None):
             bash_errorout('ip netns exec {{NAMESPACE_NAME}} ip addr flush dev {{INNER_DEV}}')
-            bash_errorout('ip netns exec {{NAMESPACE_NAME}} ip addr add {{DHCP_IP}}/{{DHCP_NETMASK}} dev {{INNER_DEV}}')
+            bash_errorout('ip netns exec {{NAMESPACE_NAME}} ip addr add {{DHCP_IP}}/{{PREFIX_LEN}} dev {{INNER_DEV}}')
 
         bash_errorout('ip netns exec {{NAMESPACE_NAME}} ip link set {{INNER_DEV}} up')
 
-        if DHCP_IP is None or DHCP_NETMASK is None:
+        if DHCP_IP is None or (DHCP_NETMASK is None and self.prefixLen is None):
             logger.debug("no dhcp ip[{{DHCP_IP}}] or netmask[{{DHCP_NETMASK}}] for {{INNER_DEV}} in {{NAMESPACE_NAME}}, skip ebtables/iptables config")
+            return
+
+        if self.ipVersion == 6:
             return
 
         ret = bash_r(EBTABLES_CMD + ' -L {{CHAIN_NAME}} > /dev/null 2>&1')
@@ -743,6 +752,8 @@ mimetype.assign = (
         p.dhcp_server_ip = cmd.dhcpServerIp
         p.dhcp_netmask = cmd.dhcpNetmask
         p.namespace_name = cmd.namespaceName
+        p.ipVersion = cmd.ipVersion
+        p.prefixLen = cmd.prefixLen
         p.prepare()
 
         return jsonobject.dumps(PrepareDhcpRsp())
@@ -926,8 +937,139 @@ tag:{{o.tag}},option:mtu,{{o.mtu}}
             else:
                 self._refresh_dnsmasq(namespace_name, conf_file_path)
 
+        @in_bash
+        def applyv6(dhcp):
+            bridge_name = dhcp[0].bridgeName
+            namespace_name = dhcp[0].namespaceName
+            dnsDomain = dhcp[0].dnsDomain
+            conf_file_path, dhcp_path, dns_path, option_path, log_path = self._make_conf_path(namespace_name)
+
+            conf_file = '''\
+domain-needed
+bogus-priv
+no-hosts
+addn-hosts={{dns}}
+dhcp-option=vendor:MSFT,2,1i
+dhcp-lease-max=65535
+dhcp-hostsfile={{dhcp}}
+dhcp-optsfile={{option}}
+log-facility={{log}}
+interface={{iface_name}}
+except-interface=lo
+bind-interfaces
+leasefile-ro
+{% for cidr in networkCidrs -%}
+dhcp-range={{cidr}},static
+{% endfor -%}
+'''
+
+            br_num = shell.call("ip netns list-id | grep -w %s | awk '{print $2}'" % namespace_name)
+            br_num = br_num.strip(' \t\r\n')
+            if not br_num:
+                raise Exception('cannot find the ID for the namespace[%s]' % namespace_name)
+
+            tmpt = Template(conf_file)
+            conf_file = tmpt.render({
+                'dns': dns_path,
+                'dhcp': dhcp_path,
+                'option': option_path,
+                'log': log_path,
+                'iface_name': 'inner%s' % br_num,
+                'networkCidrs': [d.networkCidr.replace("/", "") for d in dhcp if d.networkCidr],
+            })
+
+            restart_dnsmasq = cmd.rebuild
+            if not os.path.exists(conf_file_path) or cmd.rebuild:
+                with open(conf_file_path, 'w') as fd:
+                    fd.write(conf_file)
+            else:
+                with open(conf_file_path, 'r') as fd:
+                    c = fd.read()
+
+                if c != conf_file:
+                    logger.debug('dnsmasq configure file for bridge[%s] changed, restart it' % bridge_name)
+                    restart_dnsmasq = True
+                    with open(conf_file_path, 'w') as fd:
+                        fd.write(conf_file)
+                    logger.debug('wrote dnsmasq configure file for bridge[%s]\n%s' % (bridge_name, conf_file))
+
+            info = []
+            for d in dhcp:
+                dhcp_info = {'tag': d.mac.replace(':', '')}
+                dhcp_info.update(d.__dict__)
+                dhcp_info['dns'] = ','.join(d.dns)
+                routes = []
+                # add classless-static-route (option 121) for gateway:
+                if d.isDefaultL3Network:
+                    routes.append(','.join(['0.0.0.0/0', d.gateway]))
+                for route in d.hostRoutes:
+                    routes.append(','.join([route.prefix, route.nexthop]))
+                dhcp_info['routes'] = ','.join(routes)
+                info.append(dhcp_info)
+
+                if not cmd.rebuild:
+                    self._erase_configurations(d.mac, d.ip, dhcp_path, dns_path, option_path)
+
+            dhcp_conf = '''\
+{% for d in dhcp -%}
+{% if d.isDefaultL3Network -%}
+{{d.mac}},{{d.hostname}},[{{d.ip}}],{{d.hostname}},infinite
+{% else -%}
+{{d.mac}},{{d.hostname}},[{{d.ip}}],infinite
+{% endif -%}
+{% endfor -%}
+'''
+
+            tmpt = Template(dhcp_conf)
+            dhcp_conf = tmpt.render({'dhcp': info})
+            mode = 'a+'
+            if cmd.rebuild:
+                mode = 'w'
+
+            with open(dhcp_path, mode) as fd:
+                fd.write(dhcp_conf)
+
+            option_conf = '''\
+{% for o in options -%}
+{% if o.isDefaultL3Network -%}
+{% if o.dns -%}
+tag:{{o.tag}},option6:dns-server,{{o.dns}}
+{% endif -%}
+{% if o.dnsDomain -%}
+tag:{{o.tag}},option6:domain-search,{{o.dnsDomain}}
+{% endif -%}
+{% endif -%}
+{% endfor -%}
+'''
+            tmpt = Template(option_conf)
+            option_conf = tmpt.render({'options': info})
+
+            with open(option_path, mode) as fd:
+                fd.write(option_conf)
+
+            hostname_conf = '''\
+            {% for h in hostnames -%}
+            {% if h.isDefaultL3Network and h.hostname -%}
+            {{h.ip}} {{h.hostname}}
+            {% endif -%}
+            {% endfor -%}
+                '''
+            tmpt = Template(hostname_conf)
+            hostname_conf = tmpt.render({'hostnames': info})
+
+            with open(dns_path, mode) as fd:
+                fd.write(hostname_conf)
+
+            if restart_dnsmasq:
+                self._restart_dnsmasq(namespace_name, conf_file_path)
+            else:
+                self._refresh_dnsmasq(namespace_name, conf_file_path)
+
         for k, v in namespace_dhcp.iteritems():
-            apply(v)
+            if v[0].ipVersion == 4:
+                apply(v)
+            else:
+                applyv6(v)
 
         rsp = ApplyDhcpRsp()
         return jsonobject.dumps(rsp)
