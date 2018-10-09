@@ -150,6 +150,96 @@ class DhcpEnv(object):
     @lock.file_lock('/run/xtables.lock')
     @in_bash
     def prepare(self):
+        def _prepare_dhcp4_iptables():
+            ret = bash_r(EBTABLES_CMD + ' -L {{CHAIN_NAME}} > /dev/null 2>&1')
+            if ret != 0:
+                bash_errorout(EBTABLES_CMD + ' -N {{CHAIN_NAME}}')
+
+            ret = bash_r(EBTABLES_CMD + ' -L FORWARD | grep -- "-j {{CHAIN_NAME}}" > /dev/null')
+            if ret != 0:
+                bash_errorout(EBTABLES_CMD + ' -I FORWARD -j {{CHAIN_NAME}}')
+
+            ret = bash_r(
+                EBTABLES_CMD + ' -L {{CHAIN_NAME}} | grep -- "-p ARP -o {{BR_PHY_DEV}} --arp-ip-dst {{DHCP_IP}} -j DROP" > /dev/null')
+            if ret != 0:
+                bash_errorout(
+                    EBTABLES_CMD + ' -I {{CHAIN_NAME}} -p ARP -o {{BR_PHY_DEV}} --arp-ip-dst {{DHCP_IP}} -j DROP')
+
+            ret = bash_r(
+                EBTABLES_CMD + ' -L {{CHAIN_NAME}} | grep -- "-p ARP -i {{BR_PHY_DEV}} --arp-ip-dst {{DHCP_IP}} -j DROP" > /dev/null')
+            if ret != 0:
+                bash_errorout(
+                    EBTABLES_CMD + ' -I {{CHAIN_NAME}} -p ARP -i {{BR_PHY_DEV}} --arp-ip-dst {{DHCP_IP}} -j DROP')
+
+            ret = bash_r(
+                EBTABLES_CMD + ' -L {{CHAIN_NAME}} | grep -- "-p IPv4 -o {{BR_PHY_DEV}} --ip-proto udp --ip-sport 67:68 -j DROP" > /dev/null')
+            if ret != 0:
+                bash_errorout(
+                    EBTABLES_CMD + ' -I {{CHAIN_NAME}} -p IPv4 -o {{BR_PHY_DEV}} --ip-proto udp --ip-sport 67:68 -j DROP')
+
+            ret = bash_r(
+                EBTABLES_CMD + ' -L {{CHAIN_NAME}} | grep -- "-p IPv4 -i {{BR_PHY_DEV}} --ip-proto udp --ip-sport 67:68 -j DROP" > /dev/null')
+            if ret != 0:
+                bash_errorout(
+                    EBTABLES_CMD + ' -I {{CHAIN_NAME}} -p IPv4 -i {{BR_PHY_DEV}} --ip-proto udp --ip-sport 67:68 -j DROP')
+
+            ret = bash_r("ebtables-save | grep -- '-A {{CHAIN_NAME}} -j RETURN'")
+            if ret != 0:
+                bash_errorout(EBTABLES_CMD + ' -A {{CHAIN_NAME}} -j RETURN')
+
+            # Note(WeiW): fix dhcp checksum, see more at #982
+            ret = bash_r("iptables-save | grep -- '-p udp -m udp --dport 68 -j CHECKSUM --checksum-fill'")
+            if ret != 0:
+                bash_errorout(
+                    'iptables -w -t mangle -A POSTROUTING -p udp -m udp --dport 68 -j CHECKSUM --checksum-fill')
+
+        def _add_ebtables_rule(rule):
+            ret = bash_r(
+                EBTABLES_CMD + ' -L {{CHAIN_NAME}} | grep -- {{rule}} > /dev/null')
+            if ret != 0:
+                bash_errorout(
+                    EBTABLES_CMD + ' -I {{CHAIN_NAME}} {{rule}}')
+
+        def _prepare_dhcp6_iptables():
+            ret = bash_r(EBTABLES_CMD + ' -L {{CHAIN_NAME}} > /dev/null 2>&1')
+            if ret != 0:
+                bash_errorout(EBTABLES_CMD + ' -N {{CHAIN_NAME}}')
+
+            ret = bash_r(EBTABLES_CMD + ' -F {{CHAIN_NAME}} > /dev/null 2>&1')
+
+            ret = bash_r(EBTABLES_CMD + ' -L FORWARD | grep -- "-j {{CHAIN_NAME}}" > /dev/null')
+            if ret != 0:
+                bash_errorout(EBTABLES_CMD + ' -I FORWARD -j {{CHAIN_NAME}}')
+
+            # ipv6 icmp can not parse ns/na target ip
+            rs_rule_o = "-p IPv6 -o {{OUTER_DEV}} --ip6-proto ipv6-icmp --ip6-icmp-type router-solicitation -j DROP"
+            _add_ebtables_rule(rs_rule_o)
+
+            ra_rule_o = "-p IPv6 -o {{OUTER_DEV}} --ip6-proto ipv6-icmp --ip6-icmp-type router-advertisement -j DROP"
+            _add_ebtables_rule(ra_rule_o)
+
+            rs_rule_i = "-p IPv6 -i {{OUTER_DEV}} --ip6-proto ipv6-icmp --ip6-icmp-type router-solicitation -j DROP"
+            _add_ebtables_rule(rs_rule_i)
+
+            ra_rule_i = "-p IPv6 -i {{OUTER_DEV}} --ip6-proto ipv6-icmp --ip6-icmp-type router-advertisement -j DROP"
+            _add_ebtables_rule(ra_rule_i)
+
+            dhcpv6_rule_o = "-p IPv6 -o {{BR_PHY_DEV}} --ip6-proto udp --ip6-sport 546:547 -j DROP"
+            _add_ebtables_rule(dhcpv6_rule_o)
+
+            dhcpv6_rule_i = "-p IPv6 -i {{BR_PHY_DEV}} --ip6-proto udp --ip6-sport 546:547 -j DROP"
+            _add_ebtables_rule(dhcpv6_rule_i)
+
+            ret = bash_r("ebtables-save | grep -- '-A {{CHAIN_NAME}} -j RETURN'")
+            if ret != 0:
+                bash_errorout(EBTABLES_CMD + ' -A {{CHAIN_NAME}} -j RETURN')
+
+            # Note(WeiW): fix dhcp checksum, see more at #982
+            ret = bash_r("ip6tables-save | grep -- '-p udp -m udp --dport 546 -j CHECKSUM --checksum-fill'")
+            if ret != 0:
+                bash_errorout(
+                    'ip6tables -w -t mangle -A POSTROUTING -p udp -m udp --dport 546 -j CHECKSUM --checksum-fill')
+
         NAMESPACE_ID = None
 
         NAMESPACE_NAME = self.namespace_name
@@ -214,40 +304,9 @@ class DhcpEnv(object):
             return
 
         if self.ipVersion == 6:
-            return
-
-        ret = bash_r(EBTABLES_CMD + ' -L {{CHAIN_NAME}} > /dev/null 2>&1')
-        if ret != 0:
-            bash_errorout(EBTABLES_CMD + ' -N {{CHAIN_NAME}}')
-
-        ret = bash_r(EBTABLES_CMD + ' -L FORWARD | grep -- "-j {{CHAIN_NAME}}" > /dev/null')
-        if ret != 0:
-            bash_errorout(EBTABLES_CMD + ' -I FORWARD -j {{CHAIN_NAME}}')
-
-        ret = bash_r(EBTABLES_CMD + ' -L {{CHAIN_NAME}} | grep -- "-p ARP -o {{BR_PHY_DEV}} --arp-ip-dst {{DHCP_IP}} -j DROP" > /dev/null')
-        if ret != 0:
-            bash_errorout(EBTABLES_CMD + ' -I {{CHAIN_NAME}} -p ARP -o {{BR_PHY_DEV}} --arp-ip-dst {{DHCP_IP}} -j DROP')
-
-        ret = bash_r(EBTABLES_CMD + ' -L {{CHAIN_NAME}} | grep -- "-p ARP -i {{BR_PHY_DEV}} --arp-ip-dst {{DHCP_IP}} -j DROP" > /dev/null')
-        if ret != 0:
-            bash_errorout(EBTABLES_CMD + ' -I {{CHAIN_NAME}} -p ARP -i {{BR_PHY_DEV}} --arp-ip-dst {{DHCP_IP}} -j DROP')
-
-        ret = bash_r(EBTABLES_CMD + ' -L {{CHAIN_NAME}} | grep -- "-p IPv4 -o {{BR_PHY_DEV}} --ip-proto udp --ip-sport 67:68 -j DROP" > /dev/null')
-        if ret != 0:
-            bash_errorout(EBTABLES_CMD + ' -I {{CHAIN_NAME}} -p IPv4 -o {{BR_PHY_DEV}} --ip-proto udp --ip-sport 67:68 -j DROP')
-
-        ret = bash_r(EBTABLES_CMD + ' -L {{CHAIN_NAME}} | grep -- "-p IPv4 -i {{BR_PHY_DEV}} --ip-proto udp --ip-sport 67:68 -j DROP" > /dev/null')
-        if ret != 0:
-            bash_errorout(EBTABLES_CMD + ' -I {{CHAIN_NAME}} -p IPv4 -i {{BR_PHY_DEV}} --ip-proto udp --ip-sport 67:68 -j DROP')
-
-        ret = bash_r("ebtables-save | grep -- '-A {{CHAIN_NAME}} -j RETURN'")
-        if ret != 0:
-            bash_errorout(EBTABLES_CMD + ' -A {{CHAIN_NAME}} -j RETURN')
-
-        # Note(WeiW): fix dhcp checksum, see more at #982
-        ret = bash_r("iptables-save | grep -- '-p udp -m udp --dport 68 -j CHECKSUM --checksum-fill'")
-        if ret != 0:
-            bash_errorout('iptables -w -t mangle -A POSTROUTING -p udp -m udp --dport 68 -j CHECKSUM --checksum-fill')
+            _prepare_dhcp6_iptables()
+        else:
+            _prepare_dhcp4_iptables()
 
 class Mevoco(kvmagent.KvmAgent):
     APPLY_DHCP_PATH = "/flatnetworkprovider/dhcp/apply"
