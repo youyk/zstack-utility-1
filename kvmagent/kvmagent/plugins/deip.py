@@ -399,8 +399,11 @@ class DEip(kvmagent.KvmAgent):
             if not GATEWAY:
                 raise Exception('cannot find the device[%s] in the namespace[%s]' % (PRI_IDEV, NS_NAME))
 
+            # this is hack method to direct ipv6 external traffic to this eip namespace
             create_ebtable_rule_if_needed('nat', CHAIN_NAME,
                                           "-p IPv6 ! --ip6-destination {{NIC_GATEWAY}}/{{NIC_PREFIXLEN}} -j dnat --to-destination {{GATEWAY}}")
+            create_ebtable_rule_if_needed('nat', CHAIN_NAME,
+                                          "-p IPv6 ! --ip6-destination fe80::/64 -j dnat --to-destination {{GATEWAY}}")
 
         @bash.in_bash
         def enable_ipv6_forwarding():
