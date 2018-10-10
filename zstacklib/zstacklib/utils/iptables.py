@@ -563,9 +563,6 @@ iptable rules:
         return ' '.join(rule.strip().split())
     
     def add_rule(self, rule, table_name=FILTER_TABLE_NAME, order=0):
-        if int(rule.ipVersion) != 4:
-            return
-
         if table_name not in [self.FILTER_TABLE_NAME, self.NAT_TABLE_NAME, self.MANGLE_TABLE_NAME]:
             raise IPTablesError('unknown table name[%s]' % table_name)
         
@@ -966,8 +963,6 @@ ip6table rules:
         return ' '.join(rule.strip().split())
 
     def add_rule(self, rule, table_name=FILTER_TABLE_NAME, order=0):
-        if int(rule.ipVersion) != 6:
-            return
         if table_name not in [self.FILTER_TABLE_NAME, self.NAT_TABLE_NAME, self.MANGLE_TABLE_NAME]:
             raise IPTablesError('unknown table name[%s]' % table_name)
 
