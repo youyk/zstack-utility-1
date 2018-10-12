@@ -193,62 +193,68 @@ class DhcpEnv(object):
                 bash_errorout(
                     'iptables -w -t mangle -A POSTROUTING -p udp -m udp --dport 68 -j CHECKSUM --checksum-fill')
 
-        def _add_ebtables_rule(rule):
+        def _add_ebtables_rule6(rule):
             ret = bash_r(
-                EBTABLES_CMD + ' -L {{CHAIN_NAME}} | grep -- {{rule}} > /dev/null')
+                EBTABLES_CMD + ' -L {{DHCP6_CHAIN_NAME}} | grep -- {{rule}} > /dev/null')
             if ret != 0:
                 bash_errorout(
-                    EBTABLES_CMD + ' -I {{CHAIN_NAME}} {{rule}}')
+                    EBTABLES_CMD + ' -I {{DHCP6_CHAIN_NAME}} {{rule}}')
+
+        def _get_l3_uuid():
+            items = NAMESPACE_NAME.split('_')
+            return items[3]
 
         def _prepare_dhcp6_iptables():
+            l3Uuid = _get_l3_uuid()
+            DHCP6_CHAIN_NAME = "ZSTACK-DHCP6-%s" % l3Uuid[0:9]
             serverip = ip.Ipv6Address(DHCP_IP)
             ns_multicast_address = serverip.get_solicited_node_multicast_address() + "/ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"
 
-            ret = bash_r(EBTABLES_CMD + ' -L {{CHAIN_NAME}} > /dev/null 2>&1')
+            ret = bash_r(EBTABLES_CMD + ' -L {{DHCP6_CHAIN_NAME}} > /dev/null 2>&1')
             if ret != 0:
-                bash_errorout(EBTABLES_CMD + ' -N {{CHAIN_NAME}}')
+                bash_errorout(EBTABLES_CMD + ' -N {{DHCP6_CHAIN_NAME}}')
 
-            ret = bash_r(EBTABLES_CMD + ' -F {{CHAIN_NAME}} > /dev/null 2>&1')
+            ret = bash_r(EBTABLES_CMD + ' -F {{DHCP6_CHAIN_NAME}} > /dev/null 2>&1')
 
-            ret = bash_r(EBTABLES_CMD + ' -L FORWARD | grep -- "-j {{CHAIN_NAME}}" > /dev/null')
+            ret = bash_r(EBTABLES_CMD + ' -L FORWARD | grep -- "-j {{DHCP6_CHAIN_NAME}}" > /dev/null')
             if ret != 0:
-                bash_errorout(EBTABLES_CMD + ' -I FORWARD -j {{CHAIN_NAME}}')
+                bash_errorout(EBTABLES_CMD + ' -I FORWARD -j {{DHCP6_CHAIN_NAME}}')
 
             # prevent ns for dhcp server from upstream network
             ns_rule_o = "-p IPv6 -o {{BR_PHY_DEV}} --ip6-dst {{ns_multicast_address}} --ip6-proto ipv6-icmp --ip6-icmp-type neighbour-solicitation -j DROP"
-            _add_ebtables_rule(ns_rule_o)
+            _add_ebtables_rule6(ns_rule_o)
 
             na_rule_o = "-p IPv6 -o {{BR_PHY_DEV}} --ip6-dst {{ns_multicast_address}} --ip6-proto ipv6-icmp --ip6-icmp-type neighbour-advertisement -j DROP"
-            _add_ebtables_rule(na_rule_o)
+            _add_ebtables_rule6(na_rule_o)
 
             ns_rule_i = "-p IPv6 -i {{BR_PHY_DEV}} --ip6-dst {{ns_multicast_address}} --ip6-proto ipv6-icmp --ip6-icmp-type neighbour-solicitation -j DROP"
-            _add_ebtables_rule(ns_rule_i)
+            _add_ebtables_rule6(ns_rule_i)
 
             na_rule_i = "-p IPv6 -i {{BR_PHY_DEV}} --ip6-dst {{ns_multicast_address}} --ip6-proto ipv6-icmp --ip6-icmp-type neighbour-advertisement -j DROP"
-            _add_ebtables_rule(na_rule_i)
+            _add_ebtables_rule6(na_rule_i)
 
             # prevent rs/ra from dnsmasq
             rs_rule_o = "-p IPv6 -o {{OUTER_DEV}} --ip6-proto ipv6-icmp --ip6-icmp-type router-solicitation -j DROP"
-            _add_ebtables_rule(rs_rule_o)
+            _add_ebtables_rule6(rs_rule_o)
 
             ra_rule_o = "-p IPv6 -o {{OUTER_DEV}} --ip6-proto ipv6-icmp --ip6-icmp-type router-advertisement -j DROP"
-            _add_ebtables_rule(ra_rule_o)
+            _add_ebtables_rule6(ra_rule_o)
 
             rs_rule_i = "-p IPv6 -i {{OUTER_DEV}} --ip6-proto ipv6-icmp --ip6-icmp-type router-solicitation -j DROP"
-            _add_ebtables_rule(rs_rule_i)
+            _add_ebtables_rule6(rs_rule_i)
 
             ra_rule_i = "-p IPv6 -i {{OUTER_DEV}} --ip6-proto ipv6-icmp --ip6-icmp-type router-advertisement -j DROP"
-            _add_ebtables_rule(ra_rule_i)
+            _add_ebtables_rule6(ra_rule_i)
 
             dhcpv6_rule_o = "-p IPv6 -o {{BR_PHY_DEV}} --ip6-proto udp --ip6-sport 546:547 -j DROP"
-            _add_ebtables_rule(dhcpv6_rule_o)
+            _add_ebtables_rule6(dhcpv6_rule_o)
 
             dhcpv6_rule_i = "-p IPv6 -i {{BR_PHY_DEV}} --ip6-proto udp --ip6-sport 546:547 -j DROP"
-            _add_ebtables_rule(dhcpv6_rule_i)
+            _add_ebtables_rule6(dhcpv6_rule_i)
 
-            ret = bash_r("ebtables-save | grep -- '-A {{CHAIN_NAME}} -j RETURN'")
+            ret = bash_r("ebtables-save | grep -- '-A {{DHCP6_CHAIN_NAME}} -j RETURN'")
             if ret != 0:
-                bash_errorout(EBTABLES_CMD + ' -A {{CHAIN_NAME}} -j RETURN')
+                bash_errorout(EBTABLES_CMD + ' -A {{DHCP6_CHAIN_NAME}} -j RETURN')
 
             # Note(WeiW): fix dhcp checksum, see more at #982
             ret = bash_r("ip6tables-save | grep -- '-p udp -m udp --dport 546 -j CHECKSUM --checksum-fill'")
