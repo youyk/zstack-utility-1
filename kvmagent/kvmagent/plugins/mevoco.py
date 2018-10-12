@@ -1033,9 +1033,8 @@ interface={{iface_name}}
 except-interface=lo
 bind-interfaces
 leasefile-ro
-{% for cidr in networkCidrs -%}
-dhcp-range={{cidr}},static
-{% endfor -%}
+dhcp-range={{range}}
+
 '''
 
             br_num = shell.call("ip netns list-id | grep -w %s | awk '{print $2}'" % namespace_name)
@@ -1050,7 +1049,7 @@ dhcp-range={{cidr}},static
                 'option': option_path,
                 'log': log_path,
                 'iface_name': 'inner%s' % br_num,
-                'networkCidrs': [d.networkCidr.replace("/", "") for d in dhcp if d.networkCidr],
+                'range': dhcp[0].firstIp + "," + dhcp[0].endIp + "," + str(dhcp[0].prefixLength) + ",24h",
             })
 
             restart_dnsmasq = cmd.rebuild
