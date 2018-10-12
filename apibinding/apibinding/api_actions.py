@@ -26,6 +26,18 @@ class AddActionToEventSubscriptionAction(inventory.APIAddActionToEventSubscripti
         self.out = evt
         return self.out
 
+class AddAliyunEbsBackupStorageAction(inventory.APIAddAliyunEbsBackupStorageMsg):
+    def __init__(self):
+        super(AddAliyunEbsBackupStorageAction, self).__init__()
+        self.sessionUuid = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[AddAliyunEbsBackupStorageAction] cannot be None')
+        evt = api.async_call(self, self.sessionUuid)
+        self.out = evt
+        return self.out
+
 class AddAliyunEbsPrimaryStorageAction(inventory.APIAddAliyunEbsPrimaryStorageMsg):
     def __init__(self):
         super(AddAliyunEbsPrimaryStorageAction, self).__init__()
@@ -94,6 +106,18 @@ class AddAliyunNasPrimaryStorageAction(inventory.APIAddAliyunNasPrimaryStorageMs
     def run(self):
         if not self.sessionUuid:
             raise Exception('sessionUuid of action[AddAliyunNasPrimaryStorageAction] cannot be None')
+        evt = api.async_call(self, self.sessionUuid)
+        self.out = evt
+        return self.out
+
+class AddAliyunPanguPartitionAction(inventory.APIAddAliyunPanguPartitionMsg):
+    def __init__(self):
+        super(AddAliyunPanguPartitionAction, self).__init__()
+        self.sessionUuid = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[AddAliyunPanguPartitionAction] cannot be None')
         evt = api.async_call(self, self.sessionUuid)
         self.out = evt
         return self.out
@@ -3202,6 +3226,18 @@ class DeleteAliyunNasAccessGroupRuleAction(inventory.APIDeleteAliyunNasAccessGro
     def run(self):
         if not self.sessionUuid:
             raise Exception('sessionUuid of action[DeleteAliyunNasAccessGroupRuleAction] cannot be None')
+        evt = api.async_call(self, self.sessionUuid)
+        self.out = evt
+        return self.out
+
+class DeleteAliyunPanguPartitionAction(inventory.APIDeleteAliyunPanguPartitionMsg):
+    def __init__(self):
+        super(DeleteAliyunPanguPartitionAction, self).__init__()
+        self.sessionUuid = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[DeleteAliyunPanguPartitionAction] cannot be None')
         evt = api.async_call(self, self.sessionUuid)
         self.out = evt
         return self.out
@@ -7022,6 +7058,20 @@ class QueryAliyunDiskFromLocalAction(inventory.APIQueryAliyunDiskFromLocalMsg):
         self.out = reply.inventories
         return self.out
 
+class QueryAliyunEbsBackupStorageAction(inventory.APIQueryAliyunEbsBackupStorageMsg):
+    def __init__(self):
+        super(QueryAliyunEbsBackupStorageAction, self).__init__()
+        self.sessionUuid = None
+        self.reply = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[QueryAliyunEbsBackupStorageAction] cannot be None')
+        reply = api.sync_call(self, self.sessionUuid)
+        self.reply = reply
+        self.out = reply.inventories
+        return self.out
+
 class QueryAliyunEbsPrimaryStorageAction(inventory.APIQueryAliyunEbsPrimaryStorageMsg):
     def __init__(self):
         super(QueryAliyunEbsPrimaryStorageAction, self).__init__()
@@ -7045,6 +7095,20 @@ class QueryAliyunNasAccessGroupAction(inventory.APIQueryAliyunNasAccessGroupMsg)
     def run(self):
         if not self.sessionUuid:
             raise Exception('sessionUuid of action[QueryAliyunNasAccessGroupAction] cannot be None')
+        reply = api.sync_call(self, self.sessionUuid)
+        self.reply = reply
+        self.out = reply.inventories
+        return self.out
+
+class QueryAliyunPanguPartitionAction(inventory.APIQueryAliyunPanguPartitionMsg):
+    def __init__(self):
+        super(QueryAliyunPanguPartitionAction, self).__init__()
+        self.sessionUuid = None
+        self.reply = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[QueryAliyunPanguPartitionAction] cannot be None')
         reply = api.sync_call(self, self.sessionUuid)
         self.reply = reply
         self.out = reply.inventories
@@ -10900,6 +10964,18 @@ class UpdateAliyunDiskAction(inventory.APIUpdateAliyunDiskMsg):
         self.out = evt
         return self.out
 
+class UpdateAliyunEbsBackupStorageAction(inventory.APIUpdateAliyunEbsBackupStorageMsg):
+    def __init__(self):
+        super(UpdateAliyunEbsBackupStorageAction, self).__init__()
+        self.sessionUuid = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[UpdateAliyunEbsBackupStorageAction] cannot be None')
+        evt = api.async_call(self, self.sessionUuid)
+        self.out = evt
+        return self.out
+
 class UpdateAliyunEbsPrimaryStorageAction(inventory.APIUpdateAliyunEbsPrimaryStorageMsg):
     def __init__(self):
         super(UpdateAliyunEbsPrimaryStorageAction, self).__init__()
@@ -10944,6 +11020,18 @@ class UpdateAliyunNasAccessGroupAction(inventory.APIUpdateAliyunNasAccessGroupMs
     def run(self):
         if not self.sessionUuid:
             raise Exception('sessionUuid of action[UpdateAliyunNasAccessGroupAction] cannot be None')
+        evt = api.async_call(self, self.sessionUuid)
+        self.out = evt
+        return self.out
+
+class UpdateAliyunPanguPartitionAction(inventory.APIUpdateAliyunPanguPartitionMsg):
+    def __init__(self):
+        super(UpdateAliyunPanguPartitionAction, self).__init__()
+        self.sessionUuid = None
+        self.out = None
+    def run(self):
+        if not self.sessionUuid:
+            raise Exception('sessionUuid of action[UpdateAliyunPanguPartitionAction] cannot be None')
         evt = api.async_call(self, self.sessionUuid)
         self.out = evt
         return self.out
