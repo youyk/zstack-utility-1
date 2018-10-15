@@ -87,10 +87,12 @@ class Ipv6Address(object):
         def __init__(self, ip):
             # ipv6 address includes 8 strings
             self.ips = ["", "", "", "", "", "", "", ""]
+            self.prefix = ["", "", "", "", "", "", "", ""]
             temp = ip.split('::')
             pos = 0
             for item in temp[0].split(":"):
                 self.ips[pos] = item
+                self.prefix[pos] = item
                 pos = pos + 1
 
             addr = temp[1].split(":")
@@ -107,3 +109,11 @@ class Ipv6Address(object):
             else:
                 ip += self.ips[6]
             return ip + ":" + self.ips[7]
+
+        def get_prefix(self, prefixlen):
+            temp = []
+            for item in self.prefix:
+                if item != "":
+                    temp.append(item)
+
+            return ":".join(temp) + "::/" + str(prefixlen)

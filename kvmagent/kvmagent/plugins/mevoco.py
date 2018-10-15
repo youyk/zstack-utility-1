@@ -144,7 +144,24 @@ class DhcpEnv(object):
         self.namespace_name = None
         self.ipVersion = 0
         self.prefixLen = 0
+        self.RADVD_CONFIG_PATH = "/var/lib/zstack/radad/conf/"
+        self.RADVD_PID_PATH = "/var/lib/zstack/radad/pid/"
+        self.RADVD_LOG_PATH = "/var/log/zstack/radad/"
 
+    @in_bash
+    def stop_radvr_process(self):
+        conf_file = os.path.join(self.RADVD_CONFIG_PATH, self.dhcp_server_ip + '.conf')
+        pid_file = os.path.join(self.RADVD_PID_PATH, self.dhcp_server_ip + '.pid')
+        log_file = os.path.join(self.RADVD_LOG_PATH, self.dhcp_server_ip + '.log')
+
+        pid = bash_o("cat {{pid_file}}").strip()
+        bash_r('kill -9 {{pid}}')
+
+        if os.path.exists(conf_file):
+            shell.call('rm -f %s' % conf_file)
+
+        if os.path.exists(pid_file):
+            shell.call('rm -f %s' % pid_file)
 
     @lock.lock('prepare_dhcp_namespace')
     @lock.file_lock('/run/xtables.lock')
@@ -202,7 +219,67 @@ class DhcpEnv(object):
 
         def _get_l3_uuid():
             items = NAMESPACE_NAME.split('_')
-            return items[3]
+            return items[-1]
+
+        @in_bash
+        def _create_radvd_conf_path():
+            if not os.path.exists(self.RADVD_CONFIG_PATH):
+                shell.call('mkdir -p %s' % self.RADVD_CONFIG_PATH)
+
+            if not os.path.exists(self.RADVD_PID_PATH):
+                shell.call('mkdir -p %s' % self.RADVD_PID_PATH)
+
+            if not os.path.exists(self.RADVD_LOG_PATH):
+                shell.call('mkdir -p %s' % self.RADVD_LOG_PATH)
+
+            conf = os.path.join(self.RADVD_CONFIG_PATH, DHCP_IP + '.conf')
+            pid = os.path.join(self.RADVD_PID_PATH, DHCP_IP + '.pid')
+            log = os.path.join(self.RADVD_LOG_PATH, DHCP_IP + '.log')
+
+            return conf, pid, log
+
+        @in_bash
+        def _start_radvd():
+            conf_path, pid_path, log_path = _create_radvd_conf_path()
+            nic_gateway = ip.Ipv6Address(DHCP_IP)
+            nic_prefix = nic_gateway.get_prefix(PREFIX_LEN)
+            conf_file = '''\
+interface {{nic_name}}
+{
+    AdvSendAdvert on;
+    AdvOtherConfigFlag off;
+    AdvDefaultLifetime 1800;
+    AdvLinkMTU 0;
+    AdvCurHopLimit 64;
+    AdvReachableTime 0;
+    MaxRtrAdvInterval 90;
+    MinRtrAdvInterval 30;
+    AdvDefaultPreference medium;
+    AdvRetransTimer 0;
+    AdvManagedFlag on;
+    prefix {{prefix}}
+    {
+        AdvAutonomous off;
+        AdvOnLink off;
+        AdvRouterAddr off;
+    };
+
+};
+'''
+            tmpt = Template(conf_file)
+            conf_file = tmpt.render({
+                'nic_name': INNER_DEV,
+                'prefix': nic_prefix,
+            })
+
+            with open(conf_path, 'w') as fd:
+                fd.write(conf_file)
+
+            #must set this namespace as ipv6 router before enable radvd
+            bash_r('ip netns exec {{NAMESPACE_NAME}} sysctl -w net.ipv6.conf.all.forwarding=1')
+            bash_r("chmod 755 %s" % conf_path)
+            RADVD = bash_errorout('which radvd').strip(' \t\r\n')
+            bash_r('ip netns exec {{NAMESPACE_NAME}} {{RADVD}} -C {{conf_path}} -p {{pid_path}} -l {{log_path}}')
 
         def _prepare_dhcp6_iptables():
             l3Uuid = _get_l3_uuid()
@@ -220,7 +297,6 @@ class DhcpEnv(object):
             if ret != 0:
                 bash_errorout(EBTABLES_CMD + ' -I FORWARD -j {{DHCP6_CHAIN_NAME}}')
 
-            # prevent ns for dhcp server from upstream network
             ns_rule_o = "-p IPv6 -o {{BR_PHY_DEV}} --ip6-dst {{ns_multicast_address}} --ip6-proto ipv6-icmp --ip6-icmp-type neighbour-solicitation -j DROP"
             _add_ebtables_rule6(ns_rule_o)
 
@@ -234,18 +310,19 @@ class DhcpEnv(object):
             _add_ebtables_rule6(na_rule_i)
 
             # prevent rs/ra from dnsmasq
-            rs_rule_o = "-p IPv6 -o {{OUTER_DEV}} --ip6-proto ipv6-icmp --ip6-icmp-type router-solicitation -j DROP"
-            _add_ebtables_rule6(rs_rule_o)
+            #rs_rule_o = "-p IPv6 -o {{BR_PHY_DEV}} --ip6-proto ipv6-icmp --ip6-icmp-type router-solicitation -j DROP"
+            #_add_ebtables_rule6(rs_rule_o)
 
-            ra_rule_o = "-p IPv6 -o {{OUTER_DEV}} --ip6-proto ipv6-icmp --ip6-icmp-type router-advertisement -j DROP"
+            ra_rule_o = "-p IPv6 -o {{BR_PHY_DEV}} --ip6-proto ipv6-icmp --ip6-icmp-type router-advertisement -j DROP"
             _add_ebtables_rule6(ra_rule_o)
 
-            rs_rule_i = "-p IPv6 -i {{OUTER_DEV}} --ip6-proto ipv6-icmp --ip6-icmp-type router-solicitation -j DROP"
+            rs_rule_i = "-p IPv6 -i {{BR_PHY_DEV}} --ip6-proto ipv6-icmp --ip6-icmp-type router-solicitation -j DROP"
             _add_ebtables_rule6(rs_rule_i)
 
-            ra_rule_i = "-p IPv6 -i {{OUTER_DEV}} --ip6-proto ipv6-icmp --ip6-icmp-type router-advertisement -j DROP"
-            _add_ebtables_rule6(ra_rule_i)
+            #ra_rule_i = "-p IPv6 -i {{BR_PHY_DEV}} --ip6-proto ipv6-icmp --ip6-icmp-type router-advertisement -j DROP"
+            #_add_ebtables_rule6(ra_rule_i)
 
+            # prevent ns for dhcp server from upstream network
             dhcpv6_rule_o = "-p IPv6 -o {{BR_PHY_DEV}} --ip6-proto udp --ip6-sport 546:547 -j DROP"
             _add_ebtables_rule6(dhcpv6_rule_o)
 
@@ -327,6 +404,7 @@ class DhcpEnv(object):
 
         if self.ipVersion == 6:
             _prepare_dhcp6_iptables()
+            _start_radvd()
         else:
             _prepare_dhcp4_iptables()
 
@@ -1224,8 +1302,24 @@ sed -i '/^$/d' {{DNS}}
                 self._erase_configurations(d.mac, d.ip, dhcp_path, dns_path, option_path)
                 self._restart_dnsmasq(d.namespaceName, conf_file_path)
 
+        @in_bash
+        def stop_radvd(dhcp):
+            for d in dhcp:
+                if int(d.ipVersion) == 4:
+                    continue
+
+                p = DhcpEnv()
+                p.bridge_name = d.bridgeName
+                p.dhcp_server_ip = d.ip
+                p.dhcp_netmask = d.netmask
+                p.namespace_name = d.namespaceName
+                p.ipVersion = d.ipVersion
+                p.prefixLen = d.prefixLength
+                p.stop_radvr_process()
+
         for k, v in namespace_dhcp.iteritems():
             release(v)
+            stop_radvd(v)
 
         rsp = ReleaseDhcpRsp()
         return jsonobject.dumps(rsp)

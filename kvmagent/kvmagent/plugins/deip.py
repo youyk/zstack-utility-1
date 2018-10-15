@@ -2,6 +2,7 @@ from jinja2 import Template
 
 from kvmagent import kvmagent
 from zstacklib.utils import http
+from zstacklib.utils import ip
 from zstacklib.utils import jsonobject
 from zstacklib.utils import lock
 from zstacklib.utils import log
@@ -144,7 +145,6 @@ class DEip(kvmagent.KvmAgent):
     def apply_eips(self, req):
         cmd = jsonobject.loads(req[http.REQUEST_BODY])
         self._apply_eips(cmd.eips)
-        logger.warn("ruanshixin apply_eips")
         return jsonobject.dumps(AgentRsp())
 
     @kvmagent.replyerror
@@ -401,13 +401,17 @@ class DEip(kvmagent.KvmAgent):
 
             # this is hack method to direct ipv6 external traffic to this eip namespace
             create_ebtable_rule_if_needed('nat', CHAIN_NAME,
-                                          "-p IPv6 ! --ip6-destination {{NIC_GATEWAY}}/{{NIC_PREFIXLEN}} -j dnat --to-destination {{GATEWAY}}")
+                                          "-p IPv6 --ip6-destination {{NIC_GATEWAY}}/{{NIC_PREFIXLEN}} -j ACCEPT")
             create_ebtable_rule_if_needed('nat', CHAIN_NAME,
-                                          "-p IPv6 ! --ip6-destination fe80::/64 -j dnat --to-destination {{GATEWAY}}")
+                                          "-p IPv6 --ip6-destination fe80::/64 -j ACCEPT")
+            create_ebtable_rule_if_needed('nat', CHAIN_NAME,
+                                          "-p IPv6 --ip6-destination ff00::/8 -j ACCEPT")
+            create_ebtable_rule_if_needed('nat', CHAIN_NAME,
+                                          "-p IPv6 -j dnat --to-destination {{GATEWAY}}")
 
         @bash.in_bash
         def enable_ipv6_forwarding():
-            bash_r('sysctl -w net.ipv6.conf.all.forwarding=1')
+            bash_r('eval {{NS}} sysctl -w net.ipv6.conf.all.forwarding=1')
 
         @bash.in_bash
         def create_perf_monitor():
