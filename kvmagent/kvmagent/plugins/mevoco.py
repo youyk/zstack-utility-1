@@ -259,8 +259,10 @@ interface {{nic_name}}
     AdvManagedFlag on;
     prefix {{prefix}}
     {
+        AdvValidLifetime 2592000;
+        AdvPreferredLifetime 604800;
         AdvAutonomous off;
-        AdvOnLink off;
+        AdvOnLink on;
         AdvRouterAddr off;
     };
 
@@ -1118,7 +1120,6 @@ except-interface=lo
 bind-interfaces
 leasefile-ro
 dhcp-range={{range}}
-
 '''
 
             br_num = shell.call("ip netns list-id | grep -w %s | awk '{print $2}'" % namespace_name)
@@ -1171,7 +1172,7 @@ dhcp-range={{range}}
             dhcp_conf = '''\
 {% for d in dhcp -%}
 {% if d.isDefaultL3Network -%}
-{{d.mac}},{{d.hostname}},[{{d.ip}}],{{d.hostname}},infinite
+{{d.mac}},set:{{d.tag}},[{{d.ip}}],{{d.hostname}},infinite
 {% else -%}
 {{d.mac}},{{d.hostname}},[{{d.ip}}],infinite
 {% endif -%}
@@ -1206,12 +1207,12 @@ tag:{{o.tag}},option6:domain-search,{{o.dnsDomain}}
                 fd.write(option_conf)
 
             hostname_conf = '''\
-            {% for h in hostnames -%}
-            {% if h.isDefaultL3Network and h.hostname -%}
-            {{h.ip}} {{h.hostname}}
-            {% endif -%}
-            {% endfor -%}
-                '''
+{% for h in hostnames -%}
+{% if h.isDefaultL3Network and h.hostname -%}
+{{h.ip}} {{h.hostname}}
+{% endif -%}
+{% endfor -%}
+'''
             tmpt = Template(hostname_conf)
             hostname_conf = tmpt.render({'hostnames': info})
 
