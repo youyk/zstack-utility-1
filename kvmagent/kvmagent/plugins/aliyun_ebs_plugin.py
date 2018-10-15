@@ -70,7 +70,7 @@ class AliyunEbsStoragePlugin(kvmagent.KvmAgent):
     @kvmagent.replyerror
     def detachvolume(self, req):
         cmd = jsonobject.loads(req[http.REQUEST_BODY])
-        logger.debug('detach volume %d' % cmd.volumeId)
+        logger.debug('detach volume %s' % cmd.volumeId)
         rsp = kvmagent.AgentResponse()
         s = shell.ShellCmd("/opt/tdc/tdc_admin destroy-vrbd --device_id=%d" % cmd.volumeId)
         s(False)
