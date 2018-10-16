@@ -95,12 +95,13 @@ class Ipv6Address(object):
                 self.prefix[pos] = item
                 pos = pos + 1
 
-            addr = temp[1].split(":")
-            addr_len = len(addr)
-            pos = 8 - addr_len
-            for item in addr:
-                self.ips[pos] = item
-                pos = pos + 1
+            if len(temp) == 2:
+                addr = temp[1].split(":")
+                addr_len = len(addr)
+                pos = 8 - addr_len
+                for item in addr:
+                    self.ips[pos] = item
+                    pos = pos + 1
 
         def get_solicited_node_multicast_address(self):
             ip = "ff02::1:ff"
