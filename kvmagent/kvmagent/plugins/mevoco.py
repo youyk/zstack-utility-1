@@ -150,12 +150,13 @@ class DhcpEnv(object):
 
     @in_bash
     def stop_radvr_process(self):
-        conf_file = os.path.join(self.RADVD_CONFIG_PATH, self.dhcp_server_ip + '.conf')
-        pid_file = os.path.join(self.RADVD_PID_PATH, self.dhcp_server_ip + '.pid')
-        log_file = os.path.join(self.RADVD_LOG_PATH, self.dhcp_server_ip + '.log')
+        conf_file = os.path.join(self.RADVD_CONFIG_PATH, self.namespace_name + '.conf')
+        pid_file = os.path.join(self.RADVD_PID_PATH, self.namespace_name + '.pid')
+        log_file = os.path.join(self.RADVD_LOG_PATH, self.namespace_name + '.log')
 
-        pid = bash_o("cat {{pid_file}}").strip()
-        bash_r('kill -9 {{pid}}')
+        if os.path.exists(pid_file):
+            pid = bash_o("cat {{pid_file}}").strip()
+            bash_r('kill -9 {{pid}}')
 
         if os.path.exists(conf_file):
             shell.call('rm -f %s' % conf_file)
@@ -232,9 +233,9 @@ class DhcpEnv(object):
             if not os.path.exists(self.RADVD_LOG_PATH):
                 shell.call('mkdir -p %s' % self.RADVD_LOG_PATH)
 
-            conf = os.path.join(self.RADVD_CONFIG_PATH, DHCP_IP + '.conf')
-            pid = os.path.join(self.RADVD_PID_PATH, DHCP_IP + '.pid')
-            log = os.path.join(self.RADVD_LOG_PATH, DHCP_IP + '.log')
+            conf = os.path.join(self.RADVD_CONFIG_PATH, NAMESPACE_NAME + '.conf')
+            pid = os.path.join(self.RADVD_PID_PATH, NAMESPACE_NAME + '.pid')
+            log = os.path.join(self.RADVD_LOG_PATH, NAMESPACE_NAME + '.log')
 
             return conf, pid, log
 
@@ -514,14 +515,16 @@ tag:{{TAG}},option:dns-server,{{DNS}}
     @kvmagent.replyerror
     @in_bash
     def delete_dhcp_namespace(self, req):
-        cmd = jsonobject.loads(req[http.REQUEST_BODY])
-        dhcp_ip = bash_o("ip netns exec %s ip route | awk '{print $9}'" % cmd.namespaceName)
-        dhcp_ip = dhcp_ip.strip(" \t\n\r")
+        def _delete_dhcp6(namspace):
+            items = namspace.split('_')
+            l3_uuid = items[-1]
+            DHCP6_CHAIN_NAME = "ZSTACK-DHCP6-%s" % l3_uuid[0:9]
 
-        if dhcp_ip:
-            CHAIN_NAME = "ZSTACK-%s" % dhcp_ip
+            p = DhcpEnv()
+            p.namespace_name = cmd.namespaceName
+            p.stop_radvr_process()
 
-            o = bash_o("ebtables-save | grep {{CHAIN_NAME}} | grep -- -A")
+            o = bash_o("ebtables-save | grep {{DHCP6_CHAIN_NAME}} | grep -- -A")
             o = o.strip(" \t\r\n")
             if o:
                 cmds = []
@@ -530,12 +533,39 @@ tag:{{TAG}},option:dns-server,{{DNS}}
 
                 bash_r("\n".join(cmds))
 
-            ret = bash_r("ebtables-save | grep '\-A {{CHAIN_NAME}} -j RETURN'")
+            ret = bash_r("ebtables-save | grep '\-A {{DHCP6_CHAIN_NAME}} -j RETURN'")
             if ret != 0:
-                bash_errorout(EBTABLES_CMD + ' -A {{CHAIN_NAME}} -j RETURN')
+                bash_errorout(EBTABLES_CMD + ' -D {{DHCP6_CHAIN_NAME}} -j RETURN')
 
-        bash_errorout("ps aux | grep -v grep | grep -w dnsmasq | grep -w %s | awk '{printf $2}' | xargs -r kill -9" % cmd.namespaceName)
-        bash_errorout("ip netns | grep -w %s | grep -v grep | awk '{print $1}' | xargs -r ip netns del %s" % (cmd.namespaceName, cmd.namespaceName))
+        def _delete_dhcp4(namspace):
+            dhcp_ip = bash_o("ip netns exec %s ip route | awk '{print $9}'" % namspace)
+            dhcp_ip = dhcp_ip.strip(" \t\n\r")
+
+            if dhcp_ip:
+                CHAIN_NAME = "ZSTACK-%s" % dhcp_ip
+
+                o = bash_o("ebtables-save | grep {{CHAIN_NAME}} | grep -- -A")
+                o = o.strip(" \t\r\n")
+                if o:
+                    cmds = []
+                    for l in o.split("\n"):
+                        cmds.append(EBTABLES_CMD + " %s" % l.replace("-A", "-D"))
+
+                    bash_r("\n".join(cmds))
+
+                ret = bash_r("ebtables-save | grep '\-A {{CHAIN_NAME}} -j RETURN'")
+                if ret != 0:
+                    bash_errorout(EBTABLES_CMD + ' -D {{CHAIN_NAME}} -j RETURN')
+
+            bash_errorout(
+                "ps aux | grep -v grep | grep -w dnsmasq | grep -w %s | awk '{printf $2}' | xargs -r kill -9" % namspace)
+            bash_errorout("ip netns | grep -w %s | grep -v grep | awk '{print $1}' | xargs -r ip netns del %s" % (
+                namspace, namspace))
+
+        cmd = jsonobject.loads(req[http.REQUEST_BODY])
+        # don't care about ip4, ipv6 because namespaces are different for l3 networks
+        _delete_dhcp4(cmd.namespaceName)
+        _delete_dhcp6(cmd.namespaceName)
 
         return jsonobject.dumps(DeleteNamespaceRsp())
 
@@ -1303,24 +1333,8 @@ sed -i '/^$/d' {{DNS}}
                 self._erase_configurations(d.mac, d.ip, dhcp_path, dns_path, option_path)
                 self._restart_dnsmasq(d.namespaceName, conf_file_path)
 
-        @in_bash
-        def stop_radvd(dhcp):
-            for d in dhcp:
-                if int(d.ipVersion) == 4:
-                    continue
-
-                p = DhcpEnv()
-                p.bridge_name = d.bridgeName
-                p.dhcp_server_ip = d.ip
-                p.dhcp_netmask = d.netmask
-                p.namespace_name = d.namespaceName
-                p.ipVersion = d.ipVersion
-                p.prefixLen = d.prefixLength
-                p.stop_radvr_process()
-
         for k, v in namespace_dhcp.iteritems():
             release(v)
-            stop_radvd(v)
 
         rsp = ReleaseDhcpRsp()
         return jsonobject.dumps(rsp)
