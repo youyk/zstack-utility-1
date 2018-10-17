@@ -46,21 +46,28 @@ class AliyunEbsStoragePlugin(kvmagent.KvmAgent):
             c.write(config)
             c.close()
 
-        def updateConfig(config):
+        def updateTdcConfig(config, cfile):
             '''
                1. read /opt/tdc/apsara_global_config.json if existed
                2. compare with config
                3. overwrite if it is different
             '''
-            cfile = '/opt/tdc/apsara_global_config.json'
-            if not os.path.exists('/opt/tdc/apsara_global_config.json'):
+            if not os.path.exists(cfile):
+                d = os.path.dirname(cfile)
+                if not os.path.exists(d):
+                    os.makedirs(d, 0755)
                 overwriteConfig(config, cfile)
+                return True
 
+            updated = False
             c = open(cfile)
             if config != c.read().strip():
                 overwriteConfig(config, cfile)
+                updated = True
 
             c.close()
+            return updated
+
 
         logger.debug('install tdc pkg')
         rsp = kvmagent.AgentResponse()
@@ -78,9 +85,11 @@ class AliyunEbsStoragePlugin(kvmagent.KvmAgent):
                 shell.call(yum_cmd)
                 yum_cmd = "yum --disablerepo=* --enablerepo=zstack-mn,qemu-kvm-ev-mn install -y kernel-3.10.0-693.11.1.el7.x86_64-vrbd-1.0-0.1.release1.alios7.x86_64"
                 shell.call(yum_cmd)
+                yum_cmd = "yum --disablerepo=* --enablerepo=zstack-mn,qemu-kvm-ev-mn install -y kernel-devel-3.10.0-327.36.1.el7.x86_64"
+                shell.call(yum_cmd)
                 yum_cmd = "yum --disablerepo=* --enablerepo=zstack-mn,qemu-kvm-ev-mn install -y tdc-unified-8.2.0.release.el5.x86_64"
                 shell.call(yum_cmd)
-                shell.call("service tdc start")
+                shell.call("service tdc restart")
 
                 startCmd(False)
                 if startCmd.return_code != 0:
@@ -89,7 +98,12 @@ class AliyunEbsStoragePlugin(kvmagent.KvmAgent):
                     return jsonobject.dumps(rsp)
 
 
-            updateConfig(cmd.tdcConfig)
+            if cmd.tdcConfig and cmd.nuwaConfig and cmd.nuwaCfg:
+                tdc = updateTdcConfig(cmd.tdcConfig, '/opt/tdc/apsara_global_config.json')
+                nuwa1 = updateTdcConfig(cmd.nuwaConfig, '/apsara/conf/conffiles/nuwa/client/nuwa_config.json')
+                nuwa2 = updateTdcConfig(cmd.nuwaCfg, '/apsara/nuwa/nuwa.cfg')
+                if tdc or nuwa1 or nuwa2:
+                    shell.call("service tdc restart")
 
         return jsonobject.dumps(rsp)
 
