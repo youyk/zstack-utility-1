@@ -85,8 +85,6 @@ class AliyunEbsStoragePlugin(kvmagent.KvmAgent):
                 shell.call(yum_cmd)
                 yum_cmd = "yum --disablerepo=* --enablerepo=zstack-mn,qemu-kvm-ev-mn install -y kernel-3.10.0-693.11.1.el7.x86_64-vrbd-1.0-0.1.release1.alios7.x86_64"
                 shell.call(yum_cmd)
-                yum_cmd = "yum --disablerepo=* --enablerepo=zstack-mn,qemu-kvm-ev-mn install -y kernel-devel-3.10.0-327.36.1.el7.x86_64"
-                shell.call(yum_cmd)
                 yum_cmd = "yum --disablerepo=* --enablerepo=zstack-mn,qemu-kvm-ev-mn install -y tdc-unified-8.2.0.release.el5.x86_64"
                 shell.call(yum_cmd)
                 shell.call("service tdc restart")
