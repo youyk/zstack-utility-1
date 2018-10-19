@@ -142,15 +142,14 @@ class SecurityGroupPlugin(kvmagent.KvmAgent):
                     icmp_type = '%s/%s' % (rto.startPort, rto.endPort)
 
                 if int(rto.ipVersion) == 4:
-                    ip_keyword = "-p icmp"
-                    icmp_keyword = "--icmp-type"
+                    tmpt = ' '.join(
+                        ['-A', in_chain_name, "-p icmp --icmp-type", icmp_type, '-m iprange --src-range %s -j RETURN'])
+                    cidr_tmpt = ' '.join(['-A', in_chain_name, "-p icmp --icmp-type", icmp_type, '-s %s -j RETURN'])
                 else:
-                    ip_keyword = "-p ipv6-icmp"
-                    icmp_keyword = "--icmpv6-type"
+                    tmpt = ' '.join(
+                        ['-A', in_chain_name, '-p ipv6-icmp -m iprange --src-range %s -j RETURN'])
+                    cidr_tmpt = ' '.join(['-A', in_chain_name, "-p ipv6-icmp", '-s %s -j RETURN'])
 
-                tmpt = ' '.join(
-                    ['-A', in_chain_name, ip_keyword, icmp_keyword, icmp_type, '-m iprange --src-range %s -j RETURN'])
-                cidr_tmpt = ' '.join(['-A', in_chain_name, ip_keyword, icmp_keyword, icmp_type, '-s %s -j RETURN'])
             elif rto.protocol == self.PROTOCOL_ALL:
                 tmpt = ' '.join(
                     ['-A', in_chain_name, '-p all -m state --state NEW -m iprange --src-range %s -j RETURN'])
@@ -178,15 +177,13 @@ class SecurityGroupPlugin(kvmagent.KvmAgent):
                     icmp_type = '%s/%s' % (rto.startPort, rto.endPort)
 
                 if int(rto.ipVersion) == 4:
-                    ip_keyword = "-p icmp"
-                    icmp_keyword = "--icmp-type"
+                    tmpt = ' '.join(['-A', out_chain_name, "-p icmp --icmp-type", icmp_type, '-m iprange --dst-range %s -j RETURN'])
+                    cidr_tmpt = ' '.join(['-A', out_chain_name, "-p icmp --icmp-type", icmp_type, '-d %s -j RETURN'])
                 else:
-                    ip_keyword = "-p ipv6-icmp"
-                    icmp_keyword = "--icmpv6-type"
+                    tmpt = ' '.join(
+                        ['-A', out_chain_name, "-p ipv6-icmp" , '-m iprange --dst-range %s -j RETURN'])
+                    cidr_tmpt = ' '.join(['-A', out_chain_name, "-p ipv6-icmp", '-d %s -j RETURN'])
 
-                tmpt = ' '.join(
-                    ['-A', out_chain_name, ip_keyword, icmp_keyword, icmp_type, '-m iprange --dst-range %s -j RETURN'])
-                cidr_tmpt = ' '.join(['-A', out_chain_name, ip_keyword, icmp_keyword, icmp_type, '-d %s -j RETURN'])
             elif rto.protocol == self.PROTOCOL_ALL:
                 tmpt = ' '.join(
                     ['-A', out_chain_name, '-p all -m state --state NEW -m iprange --dst-range %s -j RETURN'])

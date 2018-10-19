@@ -137,6 +137,12 @@ class UserDataEnv(object):
 
 
 class DhcpEnv(object):
+    RADVD_CONFIG_PATH = "/var/lib/zstack/radad/conf/"
+    RADVD_PID_PATH = "/var/lib/zstack/radad/pid/"
+    RADVD_LOG_PATH = "/var/log/zstack/radad/"
+    DHCP6_STATEFUL = "Stateful-DHCP"
+    DHCP6_STATELESS = "Stateless-DHCP"
+
     def __init__(self):
         self.bridge_name = None
         self.dhcp_server_ip = None
@@ -144,9 +150,7 @@ class DhcpEnv(object):
         self.namespace_name = None
         self.ipVersion = 0
         self.prefixLen = 0
-        self.RADVD_CONFIG_PATH = "/var/lib/zstack/radad/conf/"
-        self.RADVD_PID_PATH = "/var/lib/zstack/radad/pid/"
-        self.RADVD_LOG_PATH = "/var/log/zstack/radad/"
+        self.addressMode = self.DHCP6_STATEFUL
 
     @in_bash
     def stop_radvr_process(self):
@@ -248,16 +252,16 @@ class DhcpEnv(object):
 interface {{nic_name}}
 {
     AdvSendAdvert on;
-    AdvOtherConfigFlag off;
+    AdvOtherConfigFlag on;
     AdvDefaultLifetime 1800;
     AdvLinkMTU 0;
     AdvCurHopLimit 64;
     AdvReachableTime 0;
     MaxRtrAdvInterval 90;
     MinRtrAdvInterval 30;
-    AdvDefaultPreference medium;
+    AdvDefaultPreference low;
     AdvRetransTimer 0;
-    AdvManagedFlag on;
+    AdvManagedFlag {{m}};
     prefix {{prefix}}
     {
         AdvValidLifetime 2592000;
@@ -269,10 +273,16 @@ interface {{nic_name}}
 
 };
 '''
+            if ADDRESS_MODE == self.DHCP6_STATEFUL:
+                m_flag = "on"
+            else:
+                m_flag = "off"
+
             tmpt = Template(conf_file)
             conf_file = tmpt.render({
                 'nic_name': INNER_DEV,
                 'prefix': nic_prefix,
+                'm': m_flag
             })
 
             with open(conf_path, 'w') as fd:
@@ -312,18 +322,11 @@ interface {{nic_name}}
             na_rule_i = "-p IPv6 -i {{BR_PHY_DEV}} --ip6-dst {{ns_multicast_address}} --ip6-proto ipv6-icmp --ip6-icmp-type neighbour-advertisement -j DROP"
             _add_ebtables_rule6(na_rule_i)
 
-            # prevent rs/ra from dnsmasq
-            #rs_rule_o = "-p IPv6 -o {{BR_PHY_DEV}} --ip6-proto ipv6-icmp --ip6-icmp-type router-solicitation -j DROP"
-            #_add_ebtables_rule6(rs_rule_o)
-
             ra_rule_o = "-p IPv6 -o {{BR_PHY_DEV}} --ip6-proto ipv6-icmp --ip6-icmp-type router-advertisement -j DROP"
             _add_ebtables_rule6(ra_rule_o)
 
             rs_rule_i = "-p IPv6 -i {{BR_PHY_DEV}} --ip6-proto ipv6-icmp --ip6-icmp-type router-solicitation -j DROP"
             _add_ebtables_rule6(rs_rule_i)
-
-            #ra_rule_i = "-p IPv6 -i {{BR_PHY_DEV}} --ip6-proto ipv6-icmp --ip6-icmp-type router-advertisement -j DROP"
-            #_add_ebtables_rule6(ra_rule_i)
 
             # prevent ns for dhcp server from upstream network
             dhcpv6_rule_o = "-p IPv6 -o {{BR_PHY_DEV}} --ip6-proto udp --ip6-sport 546:547 -j DROP"
@@ -364,6 +367,7 @@ interface {{nic_name}}
         if self.ipVersion == 4:
             PREFIX_LEN = linux.netmask_to_cidr(DHCP_NETMASK)
 
+        ADDRESS_MODE = self.addressMode
         BR_PHY_DEV = self.bridge_name.replace('br_', '', 1).replace('_', '.', 1)
         OUTER_DEV = "outer%s" % NAMESPACE_ID
         INNER_DEV = "inner%s" % NAMESPACE_ID
@@ -945,6 +949,7 @@ mimetype.assign = (
         p.namespace_name = cmd.namespaceName
         p.ipVersion = cmd.ipVersion
         p.prefixLen = cmd.prefixLen
+        p.addressMode = cmd.addressMode
         p.prepare()
 
         return jsonobject.dumps(PrepareDhcpRsp())
