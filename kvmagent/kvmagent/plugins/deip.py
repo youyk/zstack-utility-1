@@ -337,14 +337,14 @@ class DEip(kvmagent.KvmAgent):
 
         @bash.in_bash
         def set_eip_rules_v6():
-            DNAT_NAME = "DNAT-{{VIP}}"
+            DNAT_NAME = "EIP6-DNAT-{{EIP_UUID}}"
             if bash_r('eval {{NS}} ip6tables-save | grep -w ":{{DNAT_NAME}}" > /dev/null') != 0:
                 bash_errorout('eval {{NS}} ip6tables -w -t nat -N {{DNAT_NAME}}')
 
             create_iptable_rule_if_needed("ip6tables", "-t nat", 'PREROUTING -d {{VIP}}/128 -j {{DNAT_NAME}}')
             create_iptable_rule_if_needed("ip6tables", "-t nat", '{{DNAT_NAME}} -j DNAT --to-destination {{NIC_IP}}')
 
-            FWD_NAME = "FWD-{{VIP}}"
+            FWD_NAME = "EIP6-FWD-{{EIP_UUID}}"
             if bash_r('eval {{NS}} ip6tables-save | grep -w ":{{FWD_NAME}}" > /dev/null') != 0:
                 bash_errorout('eval {{NS}} ip6tables -N {{FWD_NAME}}')
 
@@ -353,7 +353,7 @@ class DEip(kvmagent.KvmAgent):
             create_iptable_rule_if_needed("ip6tables", "-t filter", "FORWARD -i {{PUB_IDEV}} -o {{PRI_IDEV}} -j {{FWD_NAME}}")
             create_iptable_rule_if_needed("ip6tables", "-t filter", "{{FWD_NAME}} -j ACCEPT")
 
-            SNAT_NAME = "SNAT-{{VIP}}"
+            SNAT_NAME = "EIP6-SNAT-{{EIP_UUID}}"
             if bash_r('eval {{NS}} ip6tables-save | grep -w ":{{SNAT_NAME}}" > /dev/null ') != 0:
                 bash_errorout('eval {{NS}} ip6tables -w -t nat -N {{SNAT_NAME}}')
 
