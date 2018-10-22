@@ -64,7 +64,7 @@ if not status:
 if basic_json.endswith(','):
     basic_json = basic_json[:-1]
 basic_json += '}"}'
-cmd = 'curl -X POST -H "Content-Type:application/json" -H "commandpath:/baremetal/chassis/sendhardwareinfo" -d \'%s\' --retry 5 http://PXESERVER_DHCP_NIC_IP:7772/zstack/asyncrest/sendcommand' % basic_json
+cmd = 'curl -X POST -H "Content-Type:application/json" -H "commandpath:/baremetal/chassis/sendhardwareinfo" -d \'%s\' --retry 5 http://PXESERVER_DHCP_NIC_IP:7771/zstack/asyncrest/sendcommand' % basic_json
 commands.getstatusoutput(cmd)
 
 # nic
@@ -87,7 +87,7 @@ if not status:
         nic_json += '{\\"devname\\":\\"%s\\", \\"mac\\":\\"%s\\", \\"speed\\":\\"%s\\", \\"pxe\\":\\"%s\\", \\"ip\\":\\"%s\\"},' % (devname, mac, speed, pxe, ip)
     nic_json = nic_json[:-1]
 nic_json += ']"}'
-cmd = 'curl -X POST -H "Content-Type:application/json" -H "commandpath:/baremetal/chassis/sendhardwareinfo" -d \'%s\' --retry 5 http://PXESERVER_DHCP_NIC_IP:7772/zstack/asyncrest/sendcommand' % nic_json
+cmd = 'curl -X POST -H "Content-Type:application/json" -H "commandpath:/baremetal/chassis/sendhardwareinfo" -d \'%s\' --retry 5 http://PXESERVER_DHCP_NIC_IP:7771/zstack/asyncrest/sendcommand' % nic_json
 commands.getstatusoutput(cmd)
 
 # disk
@@ -100,12 +100,12 @@ if not status:
         disk_json += '{\\"name\\":\\"%s\\", \\"size\\":\\"%s\\"},' % (name, size)
     disk_json = disk_json[:-1]
 disk_json += ']"}'
-cmd = 'curl -X POST -H "Content-Type:application/json" -H "commandpath:/baremetal/chassis/sendhardwareinfo" -d \'%s\' --retry 5 http://PXESERVER_DHCP_NIC_IP:7772/zstack/asyncrest/sendcommand' % disk_json
+cmd = 'curl -X POST -H "Content-Type:application/json" -H "commandpath:/baremetal/chassis/sendhardwareinfo" -d \'%s\' --retry 5 http://PXESERVER_DHCP_NIC_IP:7771/zstack/asyncrest/sendcommand' % disk_json
 commands.getstatusoutput(cmd)
 
 # pxeserver
 pxe_json = '{"ipmiAddress":"%s", "ipmiPort":%d, "type":"pxeserver", "content":"PXESERVERUUID"}' %  (ipmiAddress, ipmiPort)
-cmd = 'curl -X POST -H "Content-Type:application/json" -H "commandpath:/baremetal/chassis/sendhardwareinfo" -d \'%s\' --retry 5 http://PXESERVER_DHCP_NIC_IP:7772/zstack/asyncrest/sendcommand' % pxe_json
+cmd = 'curl -X POST -H "Content-Type:application/json" -H "commandpath:/baremetal/chassis/sendhardwareinfo" -d \'%s\' --retry 5 http://PXESERVER_DHCP_NIC_IP:7771/zstack/asyncrest/sendcommand' % pxe_json
 commands.getstatusoutput(cmd)
 
 # poweroff after sending hardware info back to management node
