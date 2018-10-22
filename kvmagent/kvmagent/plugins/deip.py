@@ -35,10 +35,27 @@ def collect_vip_statistics():
             elif w.startswith('vnic_ip'):
                 vnic_ip = w.split(':')[1]
 
-        return ip, vip_uuid, vnic_ip
+        #ipv6 addr has been formatted
+        try:
+            vipAddr = netaddr.IPAddress(ip)
+            version = vipAddr.version
+        except Exception as e:
+            ip = ipv6TagToIpv6Address(ip)
+            version = 6
 
-    def find_namespace_name_by_ip(ip):
-        ns_name_suffix = ip.replace('.', '_')
+        try:
+            netaddr.IPAddress(vnic_ip)
+        except Exception as e:
+            vnic_ip = ipv6TagToIpv6Address(vnic_ip)
+
+        return ip, vip_uuid, vnic_ip, version
+
+    def find_namespace_name_by_ip(ipAddr, version):
+        if version == 4:
+            ns_name_suffix = ipAddr.replace('.', '_')
+        else:
+            ns_name_suffix = ipAddr
+
         o = bash_o('ip netns')
         for l in o.split('\n'):
             if ('%s ' % ns_name_suffix) in l:
@@ -47,12 +64,16 @@ def collect_vip_statistics():
 
         return None
 
-    def create_metric(line, ip, vip_uuid, vnic_ip, metrics):
+    def create_metric(line, ip, vip_uuid, vnic_ip, metrics, version):
         pairs = line.split()
         pkts = pairs[0]
         bs = pairs[1]
-        src = pairs[7]
-        dst = pairs[8]
+        if version == 4:
+            src = pairs[7]
+            dst = pairs[8]
+        else:
+            src = pairs[6]
+            dst = pairs[7]
 
         # out traffic
         if src.startswith(vnic_ip):
@@ -69,18 +90,21 @@ def collect_vip_statistics():
             g = metrics['zstack_vip_in_packages']
             g.add_metric([vip_uuid], float(pkts))
 
-    def collect(ip, vip_uuid, vnic_ip):
-        ns_name = find_namespace_name_by_ip(ip)
+    def collect(ip, vip_uuid, vnic_ip, version):
+        ns_name = find_namespace_name_by_ip(ip, version)
         if not ns_name:
             return []
 
         CHAIN_NAME = "vip-perf"
-        o = bash_o("ip netns exec {{ns_name}} iptables -nvxL {{CHAIN_NAME}} | sed '1,2d'")
+        if version == 4:
+            o = bash_o("ip netns exec {{ns_name}} iptables -nvxL {{CHAIN_NAME}} | sed '1,2d'")
+        else:
+            o = bash_o("ip netns exec {{ns_name}} ip6tables -nvxL {{CHAIN_NAME}} | sed '1,2d'")
 
         for l in o.split('\n'):
             l = l.strip(' \t\r\n')
             if l:
-                create_metric(l, ip, vip_uuid, vnic_ip, metrics)
+                create_metric(l, ip, vip_uuid, vnic_ip, metrics, version)
 
     o = bash_o('ip -o -d link')
     words = o.split()
@@ -89,7 +113,7 @@ def collect_vip_statistics():
     ret = []
     eips = {}
     for estr in eip_strings:
-        ip, vip_uuid, vnic_ip = parse_eip_string(estr)
+        ip, vip_uuid, vnic_ip, version = parse_eip_string(estr)
         if ip is None:
             logger.warn("no ip field found in %s" % estr)
             continue
@@ -100,7 +124,7 @@ def collect_vip_statistics():
             logger.warn("no vnic_ip field found in %s" % estr)
             continue
 
-        eips[ip] = (vip_uuid, vnic_ip)
+        eips[ip] = (vip_uuid, vnic_ip, version)
 
     VIP_LABEL_NAME = 'VipUUID'
     metrics = {
@@ -110,8 +134,8 @@ def collect_vip_statistics():
         'zstack_vip_in_packages': GaugeMetricFamily('zstack_vip_in_packages', 'VIP inbound traffic packages', labels=[VIP_LABEL_NAME])
     }
 
-    for ip, (vip_uuid, vnic_ip) in eips.items():
-        collect(ip, vip_uuid, vnic_ip)
+    for ip, (vip_uuid, vnic_ip, version) in eips.items():
+        collect(ip, vip_uuid, vnic_ip, version)
 
     return metrics.values()
 
@@ -258,7 +282,12 @@ class DEip(kvmagent.KvmAgent):
         EBTABLE_CHAIN_NAME= eip.vmBridgeName
         PRI_BR_PHY_DEV= eip.vmBridgeName.replace('br_', '', 1)
 
-        EIP_DESC = "eip:%s,eip_addr:%s,vnic:%s,vnic_ip:%s,vm:%s,vip:%s" % (eip.eipUuid, VIP, eip.nicName, NIC_IP, eip.vmUuid, eip.vipUuid)
+        if int(eip.ipVersion) == 4:
+            EIP_DESC = "eip:%s,eip_addr:%s,vnic:%s,vnic_ip:%s,vm:%s,vip:%s" % (eip.eipUuid, VIP, eip.nicName, NIC_IP, eip.vmUuid, eip.vipUuid)
+        else:
+            vip_tag = ipv6AddressToTag(VIP)
+            nic_tag = ipv6AddressToTag(NIC_IP)
+            EIP_DESC = "eip:%s,eip_addr:%s,vnic:%s,vnic_ip:%s,vm:%s,vip:%s" % (eip.eipUuid, vip_tag, eip.nicName, nic_tag, eip.vmUuid, eip.vipUuid)
 
         NS = "ip netns exec {{NS_NAME}}"
 
@@ -438,6 +467,30 @@ class DEip(kvmagent.KvmAgent):
             create_iptable_rule_if_needed("iptables", "-t filter", "{{CHAIN_NAME}} -s {{NIC_IP}}/32 -j RETURN")
             create_iptable_rule_if_needed("iptables", "-t filter", "{{CHAIN_NAME}} -d {{NIC_IP}}/32 -j RETURN")
 
+        def create_ipv6_perf_monitor():
+            o = bash_o("eval {{NS}} ip -o -f inet6 addr show | awk '/scope global/ {print $4}'")
+            cidr = None
+            vnic_ip = netaddr.IPAddress(NIC_IP, 6)
+            for l in o.split('\n'):
+                l = l.strip(' \t\n\r')
+                if not l:
+                    continue
+
+                nw = netaddr.IPNetwork(l)
+                if vnic_ip in nw:
+                    cidr = nw.cidr
+                    break
+
+            if not cidr:
+                raise Exception("cannot find CIDR of vnic ip[%s] in namespace %s" % (NIC_IP, NS_NAME))
+
+            CHAIN_NAME = "vip-perf"
+            bash_r("eval {{NS}} ip6tables -N {{CHAIN_NAME}} > /dev/null")
+            create_iptable_rule_if_needed("ip6tables", "-t filter", "FORWARD -s {{NIC_IP}}/128 ! -d {{cidr}} -j {{CHAIN_NAME}}", True)
+            create_iptable_rule_if_needed("ip6tables", "-t filter", "FORWARD ! -s {{cidr}} -d {{NIC_IP}}/128 -j {{CHAIN_NAME}}", True)
+            create_iptable_rule_if_needed("ip6tables", "-t filter", "{{CHAIN_NAME}} -s {{NIC_IP}}/128 -j RETURN")
+            create_iptable_rule_if_needed("ip6tables", "-t filter", "{{CHAIN_NAME}} -d {{NIC_IP}}/128 -j RETURN")
+
         if bash_r('eval {{NS}} ip link show > /dev/null') != 0:
             bash_errorout('ip netns add {{NS_NAME}}')
 
@@ -476,8 +529,15 @@ class DEip(kvmagent.KvmAgent):
             set_eip_rules_v6()
             set_default_route_if_needed("ip -6")
             enable_ipv6_forwarding()
+            create_ipv6_perf_monitor()
 
     @lock.lock('eip')
     def _apply_eips(self, eips):
         for eip in eips:
             self._apply_eip(eip)
+
+def ipv6AddressToTag(ip):
+    return ip.replace(":", "-")
+
+def ipv6TagToIpv6Address(tag):
+    return tag.replace("-", ":")

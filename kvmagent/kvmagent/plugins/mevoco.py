@@ -1169,7 +1169,7 @@ dhcp-range={{range}}
                 'option': option_path,
                 'log': log_path,
                 'iface_name': 'inner%s' % br_num,
-                'range': dhcp[0].firstIp + "," + dhcp[0].endIp + "," + str(dhcp[0].prefixLength) + ",24h",
+                'range': dhcp[0].firstIp + "," + dhcp[0].endIp + ",static," + str(dhcp[0].prefixLength) + ",24h",
             })
 
             restart_dnsmasq = cmd.rebuild
@@ -1223,15 +1223,14 @@ dhcp-range={{range}}
             with open(dhcp_path, mode) as fd:
                 fd.write(dhcp_conf)
 
+            # for dhcpv6,  if dns-server is not provided, dnsmasq will use dhcp server as dns-server
             option_conf = '''\
 {% for o in options -%}
-{% if o.isDefaultL3Network -%}
 {% if o.dns -%}
 tag:{{o.tag}},option6:dns-server,{{o.dns}}
 {% endif -%}
 {% if o.dnsDomain -%}
 tag:{{o.tag}},option6:domain-search,{{o.dnsDomain}}
-{% endif -%}
 {% endif -%}
 {% endfor -%}
 '''
