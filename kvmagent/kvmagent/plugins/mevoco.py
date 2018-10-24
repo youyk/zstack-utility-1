@@ -539,7 +539,10 @@ tag:{{TAG}},option:dns-server,{{DNS}}
 
             ret = bash_r("ebtables-save | grep '\-A {{DHCP6_CHAIN_NAME}} -j RETURN'")
             if ret != 0:
-                bash_errorout(EBTABLES_CMD + ' -D {{DHCP6_CHAIN_NAME}} -j RETURN')
+                bash_r(EBTABLES_CMD + ' -D {{DHCP6_CHAIN_NAME}} -j RETURN')
+
+            bash_r("ps aux | grep -v grep | grep -w dnsmasq | grep -w %s | awk '{printf $2}' | xargs -r kill -9" % namspace)
+            bash_r("ip netns | grep -w %s | grep -v grep | awk '{print $1}' | xargs -r ip netns del %s" % (namspace, namspace))
 
         def _delete_dhcp4(namspace):
             dhcp_ip = bash_o("ip netns exec %s ip route | awk '{print $9}'" % namspace)
@@ -559,12 +562,10 @@ tag:{{TAG}},option:dns-server,{{DNS}}
 
                 ret = bash_r("ebtables-save | grep '\-A {{CHAIN_NAME}} -j RETURN'")
                 if ret != 0:
-                    bash_errorout(EBTABLES_CMD + ' -D {{CHAIN_NAME}} -j RETURN')
+                    bash_r(EBTABLES_CMD + ' -D {{CHAIN_NAME}} -j RETURN')
 
-            bash_errorout(
-                "ps aux | grep -v grep | grep -w dnsmasq | grep -w %s | awk '{printf $2}' | xargs -r kill -9" % namspace)
-            bash_errorout("ip netns | grep -w %s | grep -v grep | awk '{print $1}' | xargs -r ip netns del %s" % (
-                namspace, namspace))
+            bash_r("ps aux | grep -v grep | grep -w dnsmasq | grep -w %s | awk '{printf $2}' | xargs -r kill -9" % namspace)
+            bash_r("ip netns | grep -w %s | grep -v grep | awk '{print $1}' | xargs -r ip netns del %s" % (namspace, namspace))
 
         cmd = jsonobject.loads(req[http.REQUEST_BODY])
         # don't care about ip4, ipv6 because namespaces are different for l3 networks
@@ -1191,7 +1192,11 @@ dhcp-range={{range}}
             for d in dhcp:
                 dhcp_info = {'tag': d.mac.replace(':', '')}
                 dhcp_info.update(d.__dict__)
-                dhcp_info['dns'] = ','.join(d.dns)
+                if d.dns is not None:
+                    dnslist = ['[%s]' % dns for dns in d.dns]
+                    dhcp_info['dnslist'] = ".".join(dnslist)
+                if d.dnsDomain is not None:
+                    dhcp_info['domainList'] = ".".join(d.dnsDomain)
                 routes = []
                 # add classless-static-route (option 121) for gateway:
                 if d.isDefaultL3Network:
@@ -1206,11 +1211,7 @@ dhcp-range={{range}}
 
             dhcp_conf = '''\
 {% for d in dhcp -%}
-{% if d.isDefaultL3Network -%}
 {{d.mac}},set:{{d.tag}},[{{d.ip}}],{{d.hostname}},infinite
-{% else -%}
-{{d.mac}},{{d.hostname}},[{{d.ip}}],infinite
-{% endif -%}
 {% endfor -%}
 '''
 
@@ -1226,11 +1227,11 @@ dhcp-range={{range}}
             # for dhcpv6,  if dns-server is not provided, dnsmasq will use dhcp server as dns-server
             option_conf = '''\
 {% for o in options -%}
-{% if o.dns -%}
-tag:{{o.tag}},option6:dns-server,{{o.dns}}
+{% if o.dnslist -%}
+tag:{{o.tag}},option6:dns-server,{{o.dnslist}}
 {% endif -%}
-{% if o.dnsDomain -%}
-tag:{{o.tag}},option6:domain-search,{{o.dnsDomain}}
+{% if o.domainList -%}
+tag:{{o.tag}},option6:domain-search,{{o.domainList}}
 {% endif -%}
 {% endfor -%}
 '''
