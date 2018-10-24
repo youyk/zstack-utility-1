@@ -60,6 +60,11 @@ def reply_error(func):
 
 
 class PxeServerAgent(object):
+    AGENT_PORT = 7770
+    NGINX_MN_PROXY_PORT = 7771
+    NGINX_TERMINAL_PROXY_PORT = 7772
+    WEBSOCKIFY_PORT = 6080
+
     ECHO_PATH = "/baremetal/pxeserver/echo"
     INIT_PATH = "/baremetal/pxeserver/init"
     PING_PATH = "/baremetal/pxeserver/ping"
@@ -70,11 +75,13 @@ class PxeServerAgent(object):
     DELETE_BM_CONFIGS_PATH = "/baremetal/pxeserver/deletebmconfigs"
     CREATE_BM_NGINX_PROXY_PATH = "/baremetal/pxeserver/createbmnginxproxy"
     DELETE_BM_NGINX_PROXY_PATH = "/baremetal/pxeserver/deletebmnginxproxy"
+    CREATE_BM_NOVNC_PROXY_PATH = "/baremetal/pxeserver/createbmnovncproxy"
+    DELETE_BM_NOVNC_PROXY_PATH = "/baremetal/pxeserver/deletebmnovncproxy"
     DOWNLOAD_FROM_IMAGESTORE_PATH = "/baremetal/pxeserver/imagestore/download"
     DOWNLOAD_FROM_CEPHB_PATH = "/baremetal/pxeserver/cephb/download"
     DELETE_BM_IMAGE_CACHE_PATH = "/baremetal/pxeserver/deletecache"
     MOUNT_BM_IMAGE_CACHE_PATH = "/baremetal/pxeserver/mountcache"
-    http_server = http.HttpServer(port=7770)
+    http_server = http.HttpServer(port=AGENT_PORT)
     http_server.logfile_path = log.get_logfile_path()
 
     BAREMETAL_LIB_PATH = "/var/lib/zstack/baremetal/"
@@ -90,7 +97,10 @@ class PxeServerAgent(object):
     PXELINUX_DEFAULT_CFG = PXELINUX_CFG_PATH + "default"
     KS_CFG_PATH = VSFTPD_ROOT_PATH + "ks/"
     INSPECTOR_KS_CFG = KS_CFG_PATH + "inspector_ks.cfg"
-    NGINX_CONF_PATH = "/etc/nginx/conf.d/pxe/"
+    NGINX_MN_PROXY_CONF_PATH = "/etc/nginx/conf.d/%s/" % NGINX_MN_PROXY_PORT
+    NGINX_TERMINAL_PROXY_CONF_PATH = "/etc/nginx/conf.d/%s/" % NGINX_TERMINAL_PROXY_PORT
+    NOVNC_INSTALL_PATH = BAREMETAL_LIB_PATH + "noVNC/"
+    NOVNC_TOKEN_PATH = NOVNC_INSTALL_PATH + "tokens/"
 
     def __init__(self):
         self.uuid = None
@@ -107,6 +117,8 @@ class PxeServerAgent(object):
         self.http_server.register_async_uri(self.DELETE_BM_CONFIGS_PATH, self.delete_bm_configs)
         self.http_server.register_async_uri(self.CREATE_BM_NGINX_PROXY_PATH, self.create_bm_nginx_proxy)
         self.http_server.register_async_uri(self.DELETE_BM_NGINX_PROXY_PATH, self.delete_bm_nginx_proxy)
+        self.http_server.register_async_uri(self.CREATE_BM_NOVNC_PROXY_PATH, self.create_bm_novnc_proxy)
+        self.http_server.register_async_uri(self.DELETE_BM_NOVNC_PROXY_PATH, self.delete_bm_novnc_proxy)
         self.http_server.register_async_uri(self.DOWNLOAD_FROM_IMAGESTORE_PATH, self.download_imagestore)
         self.http_server.register_async_uri(self.DOWNLOAD_FROM_CEPHB_PATH, self.download_cephb)
         self.http_server.register_async_uri(self.DELETE_BM_IMAGE_CACHE_PATH, self.delete_bm_image_cache)
@@ -125,24 +137,38 @@ class PxeServerAgent(object):
         return total, total - used
 
     def _start_pxe_server(self):
-        ret = bash_r("ps -ef | grep -v grep | grep dnsmasq || dnsmasq -C " + self.DNSMASQ_CONF_PATH)
+        ret = bash_r("ps -ef | grep -v 'grep' | grep 'dnsmasq -C {1}' || dnsmasq -C {1}".format(self.DNSMASQ_CONF_PATH))
         if ret != 0:
             logger.error("failed to start dnsmasq on baremetal pxeserver[uuid:%s]" % self.uuid)
             return ret
-        ret = bash_r("ps -ef | grep -v grep | grep vsftpd || vsftpd " + self.VSFTPD_CONF_PATH)
+
+        ret = bash_r("ps -ef | grep -v 'grep' | grep 'vsftpd {1}' || vsftpd {1}".format(self.VSFTPD_CONF_PATH))
         if ret != 0:
             logger.error("failed to start vsftpd on baremetal pxeserver[uuid:%s]" % self.uuid)
             return ret
+
+        ret = bash_r("ps -ef | grep -v 'grep' | grep 'websockify' | grep 'baremetal' || "
+                     "python %s/utils/websockify/run --web %s --token-plugin TokenFile --token-source=%s -D 6080"
+                     % (self.NOVNC_INSTALL_PATH, self.NOVNC_INSTALL_PATH, self.NOVNC_TOKEN_PATH))
+        if ret != 0:
+            logger.error("failed to start noVNC on baremetal pxeserver[uuid:%s]" % self.uuid)
+            return ret
+
+        ret = bash_r("systemctl start nginx")
+        if ret != 0:
+            logger.error("failed to start nginx on baremetal pxeserver[uuid:%s]" % self.uuid)
+            return ret
         return 0
 
+    # we do not stop nginx on pxeserver because it may be needed by bm with terminal proxy
+    # stop pxeserver means stop dnsmasq actually
     def _stop_pxe_server(self):
+        bash_r("pkill -9 vsftpd")
+        bash_r("kill -9 `ps -ef | grep -v grep | grep websockify | awk '{ print $2 }'`")
+
         ret = bash_r("pkill -9 dnsmasq")
         if ret != 0:
             logger.error("failed to stop dnsmasq on baremetal pxeserver[uuid:%s]" % self.uuid)
-            return ret
-        ret = bash_r("pkill -9 vsftpd")
-        if ret != 0:
-            logger.error("failed to stop vsftpd on baremetal pxeserver[uuid:%s]" % self.uuid)
             return ret
         return 0
 
@@ -170,11 +196,6 @@ class PxeServerAgent(object):
         info = fcntl.ioctl(s.fileno(), 0x8927, struct.pack('256s', ifname[:15]))
         return ':'.join(['%02x' % ord(char) for char in info[18:24]])
 
-    def _get_dhcp_range(self, dhcp_interface, dhcp_netmask):
-        dhcp_ip_address = self._get_ip_address(dhcp_interface)
-        _range = list(IPNetwork("%s/%s" % (dhcp_ip_address, dhcp_netmask)))
-        return _range[0], _range[-1]
-
     @reply_error
     def echo(self, req):
         logger.debug('get echoed')
@@ -191,15 +212,13 @@ class PxeServerAgent(object):
         self._set_capacity_to_response(rsp)
 
         # init dhcp.conf
-        dhcp_conf = """
-interface={DHCP_INTERFACE}
+        dhcp_conf = """interface={DHCP_INTERFACE}
 port=0
 dhcp-boot=pxelinux.0
 enable-tftp
 tftp-root={TFTPBOOT_PATH}
 log-dhcp
 log-facility={DNSMASQ_LOG_PATH}
-
 dhcp-range={DHCP_RANGE}
 dhcp-option=1,{DHCP_NETMASK}
 dhcp-hostsfile={DHCP_HOSTS_FILE}
@@ -213,8 +232,7 @@ dhcp-hostsfile={DHCP_HOSTS_FILE}
             f.write(dhcp_conf)
 
         # init vsftpd.conf
-        vsftpd_conf = """
-anonymous_enable=YES
+        vsftpd_conf = """anonymous_enable=YES
 anon_root={VSFTPD_ANON_ROOT}
 local_enable=YES
 write_enable=YES
@@ -237,10 +255,8 @@ xferlog_file={VSFTPD_LOG_PATH}
 
         # init pxelinux.cfg
         pxeserver_dhcp_nic_ip = self._get_ip_address(cmd.dhcpInterface)
-        pxelinux_cfg = """
-default zstack_baremetal
+        pxelinux_cfg = """default zstack_baremetal
 prompt 0
-
 label zstack_baremetal
 kernel zstack/vmlinuz
 ipappend 2
@@ -258,15 +274,73 @@ append initrd=zstack/initrd.img devfs=nomount ksdevice=bootif ks=ftp://{PXESERVE
             with open(self.INSPECTOR_KS_CFG, 'w') as fw:
                 fw.write(inspector_ks_cfg)
 
+        # config nginx
+        if not os.path.exists(self.NGINX_MN_PROXY_CONF_PATH):
+            os.makedirs(self.NGINX_MN_PROXY_CONF_PATH, 0777)
+        if not os.path.exists(self.NGINX_TERMINAL_PROXY_CONF_PATH):
+            os.makedirs(self.NGINX_TERMINAL_PROXY_CONF_PATH, 0777)
+        nginx_conf = """user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log;
+pid /run/nginx.pid;
+include /usr/share/nginx/modules/*.conf;
+events {
+    worker_connections 1024;
+}
+http {
+    access_log          /var/log/nginx/access.log;
+    sendfile            on;
+    tcp_nopush          on;
+    tcp_nodelay         on;
+    keepalive_timeout   65;
+    types_hash_max_size 2048;
+    include             /etc/nginx/mime.types;
+    default_type        application/octet-stream;
+
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        ''      close;
+    }
+
+    server {
+        listen 8090;
+        include /etc/nginx/conf.d/8090/*;
+    }
+
+    server {
+        listen 7771;
+        include /etc/nginx/conf.d/7771/*;
+    }
+
+    server {
+        listen 7772;
+        include /etc/nginx/conf.d/7772/*;
+    }
+}
+"""
+        with open("/etc/nginx/nginx.conf", 'w') as fw:
+            fw.write(nginx_conf)
+
         # create nginx proxy for http://MN_IP:8080/zstack/asyncrest/sendcommand
-        content = "location /zstack/asyncrest/sendcommand { proxy_pass http://%s:8080/zstack/asyncrest/sendcommand; }" % cmd.managementIp
-        with open("/etc/nginx/conf.d/zstack_mn.conf", 'w') as fw:
+        content = "location / { proxy_pass http://%s:8080/; }" % cmd.managementIp
+        with open("/etc/nginx/conf.d/7771/zstack_mn.conf", 'w') as fw:
             fw.write(content)
+
+        # install noVNC
+        if not os.path.exists(self.NOVNC_INSTALL_PATH):
+            ret = bash_r("tar -xf %s -C %s" % (os.path.join(self.BAREMETAL_LIB_PATH, "noVNC.tar.gz"), self.BAREMETAL_LIB_PATH))
+            if ret != 0:
+                rsp.success = False
+                rsp.error = "failed to install noVNC on baremetal pxeserver[uuid:%s]" % self.uuid
+                return json_object.dumps(rsp)
+        os.chmod(self.NOVNC_TOKEN_PATH, 0777)
 
         # start pxe services
         if self._start_pxe_server() != 0:
             rsp.success = False
             rsp.error = "failed to start baremetal pxeserver[uuid:%s]" % self.uuid
+
+        logger.info("successfully inited and started baremetal pxeserver[uuid:%s]" % self.uuid)
         return json_object.dumps(rsp)
 
     @reply_error
@@ -294,6 +368,7 @@ append initrd=zstack/initrd.img devfs=nomount ksdevice=bootif ks=ftp://{PXESERVE
         rsp.availableCapacity = avail
         return json_object.dumps(rsp)
 
+    @in_bash
     @reply_error
     def start(self, req):
         cmd = json_object.loads(req[http.REQUEST_BODY])
@@ -302,8 +377,11 @@ append initrd=zstack/initrd.img devfs=nomount ksdevice=bootif ks=ftp://{PXESERVE
         if self._start_pxe_server() != 0:
             rsp.success = False
             rsp.error = "failed to start baremetal pxeserver[uuid:%s]" % self.uuid
+
+        logger.info("successfully started baremetal pxeserver[uuid:%s]")
         return json_object.dumps(rsp)
 
+    @in_bash
     @reply_error
     def stop(self, req):
         cmd = json_object.loads(req[http.REQUEST_BODY])
@@ -312,6 +390,8 @@ append initrd=zstack/initrd.img devfs=nomount ksdevice=bootif ks=ftp://{PXESERVE
         if self._stop_pxe_server() != 0:
             rsp.success = False
             rsp.error = "failed to stop baremetal pxeserver[uuid:%s]" % self.uuid
+
+        logger.info("successfully stopped baremetal pxeserver[uuid:%s]")
         return json_object.dumps(rsp)
 
     @reply_error
@@ -322,7 +402,8 @@ append initrd=zstack/initrd.img devfs=nomount ksdevice=bootif ks=ftp://{PXESERVE
         self.dhcp_interface = cmd.dhcpInterface
 
         # create ks.cfg
-        ks_cfg_file = self.KS_CFG_PATH + cmd.pxeNicMac.replace(":", "-")
+        ks_cfg_name = cmd.pxeNicMac.replace(":", "-")
+        ks_cfg_file = os.path.join(self.KS_CFG_PATH, ks_cfg_name)
         ks_tmpl_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'ks_tmpl')
         is_zstack_iso = os.path.exists(os.path.join(self.VSFTPD_ROOT_PATH, cmd.imageUuid, "Extra", "qemu-kvm-ev"))
         with open("%s/generic_ks_tmpl" % ks_tmpl_path, 'r') as fr:
@@ -338,21 +419,20 @@ append initrd=zstack/initrd.img devfs=nomount ksdevice=bootif ks=ftp://{PXESERVE
 
         # create pxelinux.cfg
         pxeserver_dhcp_nic_ip = self._get_ip_address(cmd.dhcpInterface)
-        pxe_cfg_file = self.PXELINUX_CFG_PATH + "01-" + cmd.pxeNicMac.replace(":", "-")
-        pxelinux_cfg = """
-default zstack_baremetal
+        pxe_cfg_file = os.path.join(self.PXELINUX_CFG_PATH, "01-" + ks_cfg_name)
+        pxelinux_cfg = """default {IMAGEUUID}
 prompt 0
-
-label zstack_baremetal
+label {IMAGEUUID}
 kernel {IMAGEUUID}/vmlinuz
 ipappend 2
-append initrd={IMAGEUUID}/initrd.img devfs=nomount ksdevice=bootif ks=ftp://{PXESERVER_DHCP_NIC_IP}/ks/{KS_CFG_FILE} vnc
+append initrd={IMAGEUUID}/initrd.img devfs=nomount ksdevice=bootif ks=ftp://{PXESERVER_DHCP_NIC_IP}/ks/{KS_CFG_NAME} vnc
 """.format(PXESERVER_DHCP_NIC_IP=pxeserver_dhcp_nic_ip,
            IMAGEUUID=cmd.imageUuid,
-           KS_CFG_FILE=ks_cfg_file)
+           KS_CFG_NAME=ks_cfg_name)
         with open(pxe_cfg_file, 'w') as f:
             f.write(pxelinux_cfg)
 
+        logger.info("successfully created pxelinux.cfg and ks.cfg for baremetal instance[uuid:%s] on pxeserver[uuid:%s]" % (cmd.bmUuid, self.uuid))
         return json_object.dumps(rsp)
 
     @reply_error
@@ -360,14 +440,15 @@ append initrd={IMAGEUUID}/initrd.img devfs=nomount ksdevice=bootif ks=ftp://{PXE
         cmd = json_object.loads(req[http.REQUEST_BODY])
         rsp = AgentResponse()
 
-        pxe_cfg_file = self.PXELINUX_CFG_PATH + "01-" + cmd.pxeNicMac.replace(":", "-")
+        pxe_cfg_file = os.path.join(self.PXELINUX_CFG_PATH, "01-" + cmd.pxeNicMac.replace(":", "-"))
         if os.path.exists(pxe_cfg_file):
             os.remove(pxe_cfg_file)
 
-        ks_cfg_file = self.KS_CFG_PATH + cmd.pxeNicMac.replace(":", "-")
+        ks_cfg_file = os.path.join(self.KS_CFG_PATH, cmd.pxeNicMac.replace(":", "-"))
         if os.path.exists(ks_cfg_file):
             os.remove(ks_cfg_file)
 
+        logger.info("successfully deleted pxelinux.cfg and ks.cfg for baremetal instance[uuid:%s] on pxeserver[uuid:%s]" % (cmd.bmUuid, self.uuid))
         return json_object.dumps(rsp)
 
     @reply_error
@@ -375,10 +456,11 @@ append initrd={IMAGEUUID}/initrd.img devfs=nomount ksdevice=bootif ks=ftp://{PXE
         cmd = json_object.loads(req[http.REQUEST_BODY])
         rsp = AgentResponse()
 
-        nginx_proxy_file = self.NGINX_CONF_PATH + cmd.bmUuid
+        nginx_proxy_file = os.path.join(self.NGINX_TERMINAL_PROXY_CONF_PATH, cmd.bmUuid)
         with open(nginx_proxy_file, 'w') as f:
             f.write(cmd.upstream)
 
+        logger.info("successfully create terminal nginx proxy for baremetal instance[uuid:%s] on pxeserver[uuid:%s]" % (cmd.bmUuid, self.uuid))
         return json_object.dumps(rsp)
 
     @reply_error
@@ -386,12 +468,38 @@ append initrd={IMAGEUUID}/initrd.img devfs=nomount ksdevice=bootif ks=ftp://{PXE
         cmd = json_object.loads(req[http.REQUEST_BODY])
         rsp = AgentResponse()
 
-        nginx_proxy_file = self.NGINX_CONF_PATH + cmd.bmUuid
+        nginx_proxy_file = os.path.join(self.NGINX_TERMINAL_PROXY_CONF_PATH, cmd.bmUuid)
         if os.path.exists(nginx_proxy_file):
             os.remove(nginx_proxy_file)
 
+        logger.info("successfully deleted terminal nginx proxy for baremetal instance[uuid:%s] on pxeserver[uuid:%s]" % (cmd.bmUuid, self.uuid))
         return json_object.dumps(rsp)
 
+    @reply_error
+    def create_bm_novnc_proxy(self, req):
+        cmd = json_object.loads(req[http.REQUEST_BODY])
+        rsp = AgentResponse()
+
+        novnc_proxy_file = os.path.join(self.NOVNC_TOKEN_PATH, cmd.bmUuid)
+        with open(novnc_proxy_file, 'w') as f:
+            f.write(cmd.upstream)
+
+        logger.info("successfully created novnc proxy for baremetal instance[uuid:%s] on pxeserver[uuid:%s]" % (cmd.bmUuid, self.uuid))
+        return json_object.dumps(rsp)
+
+    @reply_error
+    def delete_bm_novnc_proxy(self, req):
+        cmd = json_object.loads(req[http.REQUEST_BODY])
+        rsp = AgentResponse()
+
+        novnc_proxy_file = os.path.join(self.NOVNC_TOKEN_PATH, cmd.bmUuid)
+        if os.path.exists(novnc_proxy_file):
+            os.remove(novnc_proxy_file)
+
+        logger.info("successfully deleted novnc proxy for baremetal instance[uuid:%s] on pxeserver[uuid:%s]" % (cmd.bmUuid, self.uuid))
+        return json_object.dumps(rsp)
+
+    @in_bash
     @reply_error
     def download_imagestore(self, req):
         cmd = json_object.loads(req[http.REQUEST_BODY])
@@ -404,8 +512,9 @@ append initrd={IMAGEUUID}/initrd.img devfs=nomount ksdevice=bootif ks=ftp://{PXE
         # mount
         cache_path = cmd.cacheInstallPath
         mount_path = os.path.join(self.VSFTPD_ROOT_PATH, cmd.imageUuid)
-        os.makedirs(mount_path)
-        ret = bash_r("sudo mount %s %s" % (cache_path, mount_path))
+        if not os.path.exists(mount_path):
+            os.makedirs(mount_path)
+        ret = bash_r("mount %s %s" % (cache_path, mount_path))
         if ret != 0:
             rsp.success = False
             rsp.error = "failed to mount image[uuid:%s] to baremetal cache %s" % (cmd.imageUuid, cache_path)
@@ -414,10 +523,12 @@ append initrd={IMAGEUUID}/initrd.img devfs=nomount ksdevice=bootif ks=ftp://{PXE
 
         # copy vmlinuz etc.
         vmlinuz_path = os.path.join(self.TFTPBOOT_PATH, cmd.imageUuid)
-        os.makedirs(vmlinuz_path)
-        shutil.copyfile(os.path.join(mount_path, "isolinux/vmlinuz*"), os.path.join(vmlinuz_path, "vmlinuz"))
-        shutil.copyfile(os.path.join(mount_path, "isolinux/initrd*.img"), os.path.join(vmlinuz_path, "initrd.img"))
+        if not os.path.exists(vmlinuz_path):
+            os.makedirs(vmlinuz_path)
+        bash_r("cp %s %s" % (mount_path + "isolinux/vmlinuz*", os.path.join(vmlinuz_path + "vmlinuz")))
+        bash_r("cp %s %s" % (mount_path + "isolinux/initrd*.img", os.path.join(vmlinuz_path + "initrd.img")))
 
+        logger.info("successfully downloaded image[uuid:%s] and mounted it" % cmd.imageUuid)
         self._set_capacity_to_response(rsp)
         return json_object.dumps(rsp)
 
@@ -428,6 +539,7 @@ append initrd={IMAGEUUID}/initrd.img devfs=nomount ksdevice=bootif ks=ftp://{PXE
         rsp = AgentResponse()
         return json_object.dumps(rsp)
 
+    @in_bash
     @reply_error
     def delete_bm_image_cache(self, req):
         cmd = json_object.loads(req[http.REQUEST_BODY])
@@ -439,15 +551,17 @@ append initrd={IMAGEUUID}/initrd.img devfs=nomount ksdevice=bootif ks=ftp://{PXE
 
         # umount
         mount_path = os.path.join(self.VSFTPD_ROOT_PATH, cmd.imageUuid)
-        bash_r("sudo umount %s" % mount_path)
+        bash_r("umount %s" % mount_path)
         os.rmdir(mount_path)
 
         # rm image cache
         os.rmdir(os.path.pardir(cmd.cacheInstallPath))
 
+        logger.info("successfully umounted and deleted cache of image[uuid:%s]" % cmd.imageUuid)
         self._set_capacity_to_response(rsp)
         return json_object.dumps(rsp)
 
+    @in_bash
     @reply_error
     def mount_bm_image_cache(self, req):
         cmd = json_object.loads(req[http.REQUEST_BODY])
@@ -455,7 +569,7 @@ append initrd={IMAGEUUID}/initrd.img devfs=nomount ksdevice=bootif ks=ftp://{PXE
 
         cache_path = cmd.cacheInstallPath
         mount_path = os.path.join(self.VSFTPD_ROOT_PATH, cmd.imageUuid)
-        ret = bash_r("mount | grep %s || sudo mount %s %s" % (mount_path, cache_path, mount_path))
+        ret = bash_r("mount | grep %s || mount %s %s" % (mount_path, cache_path, mount_path))
         if ret != 0:
             rsp.success = False
             rsp.error = "failed to mount baremetal cache of image[uuid:%s]" % cmd.imageUuid

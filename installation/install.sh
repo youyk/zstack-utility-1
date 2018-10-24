@@ -2009,7 +2009,7 @@ cs_setup_nfs(){
 
 cs_setup_nginx(){
     echo_subtitle "Configure Nginx Server"
-mkdir -p /etc/nginx/conf.d/mn
+mkdir -p /etc/nginx/conf.d/8090 && chmod -R 0777 /etc/nginx/conf.d/8090
 cp -f /etc/nginx/nginx.conf /etc/nginx/nginx.conf.bck
 cat > /etc/nginx/nginx.conf << EOF
 user nginx;
@@ -2017,11 +2017,9 @@ worker_processes auto;
 error_log /var/log/nginx/error.log;
 pid /run/nginx.pid;
 include /usr/share/nginx/modules/*.conf;
-
 events {
     worker_connections 1024;
 }
-
 http {
     access_log          /var/log/nginx/access.log;
     sendfile            on;
@@ -2034,16 +2032,14 @@ http {
 
     server {
         listen 8090;
-        include /etc/nginx/conf.d/mn/*.conf;
+        include /etc/nginx/conf.d/8090/*;
     }
 }
 EOF
-
-iptables-save | grep -- "-A INPUT -p tcp -m tcp --dport 6080 -j ACCEPT" > /dev/null 2>&1 || iptables -I INPUT -p tcp -m tcp --dport 6080 -j ACCEPT >/dev/null 2>&1
-iptables-save | grep -- "-A INPUT -p tcp -m tcp --dport 8090 -j ACCEPT" > /dev/null 2>&1 || iptables -I INPUT -p tcp -m tcp --dport 7771 -j ACCEPT >/dev/null 2>&1
-service iptables save
-systemctl enable nginx
-systemctl start nginx
+iptables-save | grep -- "-A INPUT -p tcp -m tcp --dport 8090 -j ACCEPT" > /dev/null 2>&1 || iptables -I INPUT -p tcp -m tcp --dport 8090 -j ACCEPT >/dev/null 2>&1
+service iptables save >/dev/null 2>&1
+systemctl enable nginx > /dev/null
+systemctl start nginx > /dev/null
 }
 
 cs_setup_http(){

@@ -27,12 +27,8 @@ ls /dev/sda && echo "ignoredisk --only-use=sda" > /tmp/ignoredisk.cfg
 %pre --interpreter /usr/bin/python
 import commands
 
-# create novnc proxy
-cmd = 'curl -X POST -H "Content-Type:application/json" -H "commandpath:/baremetal/instance/createnovncproxy" -d \'{"baremetalInstanceUuid":"BMUUID"}\' --retry 5 http://PXESERVER_DHCP_NIC_IP:7772/zstack/asyncrest/sendcommand'
-commands.getstatusoutput(cmd)
-
 # notify deploy begin
-cmd = 'sleep 3 && curl -X POST -H "Content-Type:application/json" -H "commandpath:/baremetal/instance/deploybegin" -d \'{"baremetalInstanceUuid":"BMUUID"}\' --retry 5 http://PXESERVER_DHCP_NIC_IP:7772/zstack/asyncrest/sendcommand'
+cmd = 'sleep 3 && curl -X POST -H "Content-Type:application/json" -H "commandpath:/baremetal/instance/deploybegin" -d \'{"baremetalInstanceUuid":"BMUUID"}\' --retry 5 http://PXESERVER_DHCP_NIC_IP:7771/zstack/asyncrest/sendcommand'
 commands.getstatusoutput(cmd)
 %end
 
@@ -42,7 +38,7 @@ curl -X POST -H "Content-Type:application/json" \
 -H "commandpath:/baremetal/instance/deploycomplete" \
 -d '{"baremetalInstanceUuid":"BMUUID"}' \
 --retry 5 \
-http://PXESERVER_DHCP_NIC_IP:7772/zstack/asyncrest/sendcommand
+http://PXESERVER_DHCP_NIC_IP:7771/zstack/asyncrest/sendcommand
 
 # baby agent
 wget -P /usr/bin ftp://PXESERVER_DHCP_NIC_IP/shellinaboxd || curl -o /usr/bin/shellinaboxd ftp://PXESERVER_DHCP_NIC_IP/shellinaboxd
@@ -63,6 +59,6 @@ curl -X POST -H "Content-Type:application/json" \
 -H "commandpath:/baremetal/instance/osrunning" \
 -d '{"baremetalInstanceUuid":"BMUUID"}' \
 --retry 5 \
-http://PXESERVER_DHCP_NIC_IP:7772/zstack/asyncrest/sendcommand
+http://PXESERVER_DHCP_NIC_IP:7771/zstack/asyncrest/sendcommand
 EOF
 %end

@@ -105,59 +105,15 @@ elif distro in DEB_BASED_OS:
 else:
     error("unsupported OS!")
 
-# name: config nginx
-command = """
-mkdir -p /etc/nginx/conf.d/pxe;
-cp -f /etc/nginx/nginx.conf /etc/nginx/nginx.conf.bck;
-cat > /etc/nginx/nginx.conf << EOF
-user nginx;
-worker_processes auto;
-error_log /var/log/nginx/error.log;
-pid /run/nginx.pid;
-include /usr/share/nginx/modules/*.conf;
-
-events {
-    worker_connections 1024;
-}
-
-http {
-    access_log          /var/log/nginx/access.log;
-    sendfile            on;
-    tcp_nopush          on;
-    tcp_nodelay         on;
-    keepalive_timeout   65;
-    types_hash_max_size 2048;
-    include             /etc/nginx/mime.types;
-    default_type        application/octet-stream;
-    
-    server {
-        listen 8090;
-        include /etc/nginx/conf.d/mn/*.conf;
-    }
-
-    server {
-        listen 7771;
-        include /etc/nginx/conf.d/pxe/*.conf;
-    }
-    
-    server {
-        listen 7772;
-        include /etc/nginx/conf.d/zstack_mn.conf;
-    }
-}
-EOF
-"""
-run_remote_command(command, host_post_info)
-
 # name: check and mount /opt/zstack-dvd
 command = """
+[ -f /opt/zstack-dvd/GPL ] || exit 1;
 mkdir -p /var/lib/zstack/baremetal/{dnsmasq,ftp/{ks,zstack-dvd},tftpboot/{zstack,pxelinux.cfg},vsftpd} /var/log/zstack/baremetal/;
 chown -R zstack:zstack /var/lib/zstack/baremetal;
-[ -f /opt/zstack-dvd/GPL ] || exit 1;
 cp /usr/share/syslinux/pxelinux.0 /var/lib/zstack/baremetal/tftpboot/;
-cp /opt/zstack-dvd/images/pxeboot/{vmlinuz,initrd.img} /var/lib/zstack/baremetal/tftpboot/zstack/;
 umount /var/lib/zstack/baremetal/ftp/zstack-dvd/ || true;
 mount --bind /opt/zstack-dvd /var/lib/zstack/baremetal/ftp/zstack-dvd/
+cp /opt/zstack-dvd/images/pxeboot/{vmlinuz,initrd.img} /var/lib/zstack/baremetal/tftpboot/zstack/;
 """
 run_remote_command(command, host_post_info)
 
@@ -167,6 +123,7 @@ sed -i 's/IPTABLES_MODULES=""/IPTABLES_MODULES="nf_conntrack_ftp"/g' /etc/syscon
 /sbin/iptables-save | grep -w -q 67 || iptables -I INPUT -p udp -m state --state NEW --sport 67:68 --dport 67:68 -j ACCEPT;
 /sbin/iptables-save | grep -w -q 69 || iptables -I INPUT -p udp -m state --state NEW --dport 69 -j ACCEPT;
 /sbin/iptables-save | grep -q "dport 21" || iptables -I INPUT -p tcp -m state --state NEW --dport 21 -j ACCEPT;
+/sbin/iptables-save | grep -q "dport 6080" || iptables -I INPUT -p tcp -m tcp --dport 6080 -j ACCEPT;
 /sbin/iptables-save | grep -q "dport 7770" || iptables -I INPUT -p tcp -m tcp --dport 7770 -j ACCEPT;
 /sbin/iptables-save | grep -q "dport 7771" || iptables -I INPUT -p tcp -m tcp --dport 7771 -j ACCEPT;
 /sbin/iptables-save | grep -q "dport 7772" || iptables -I INPUT -p tcp -m tcp --dport 7772 -j ACCEPT;
@@ -211,11 +168,15 @@ copy(copy_arg, host_post_info)
 
 # name: copy shellinaboxd
 VSFTPD_ROOT_PATH = "/var/lib/zstack/baremetal/ftp"
-command = 'mkdir -p %s' % VSFTPD_ROOT_PATH
-run_remote_command(command, host_post_info)
 copy_arg = CopyArg()
 copy_arg.src = "%s/shellinaboxd" % file_root
 copy_arg.dest = VSFTPD_ROOT_PATH
+copy(copy_arg, host_post_info)
+
+# name: copy noVNC.tar.gz
+copy_arg = CopyArg()
+copy_arg.src = "%s/noVNC.tar.gz" % file_root
+copy_arg.dest = "/var/lib/zstack/baremetal/"
 copy(copy_arg, host_post_info)
 
 # name: restart baremetalpxeserveragent
