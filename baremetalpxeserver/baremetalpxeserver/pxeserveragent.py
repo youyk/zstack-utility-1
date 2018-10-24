@@ -137,12 +137,12 @@ class PxeServerAgent(object):
         return total, total - used
 
     def _start_pxe_server(self):
-        ret = bash_r("ps -ef | grep -v 'grep' | grep 'dnsmasq -C {1}' || dnsmasq -C {1}".format(self.DNSMASQ_CONF_PATH))
+        ret = bash_r("ps -ef | grep -v 'grep' | grep 'dnsmasq -C {0}' || dnsmasq -C {0}".format(self.DNSMASQ_CONF_PATH))
         if ret != 0:
             logger.error("failed to start dnsmasq on baremetal pxeserver[uuid:%s]" % self.uuid)
             return ret
 
-        ret = bash_r("ps -ef | grep -v 'grep' | grep 'vsftpd {1}' || vsftpd {1}".format(self.VSFTPD_CONF_PATH))
+        ret = bash_r("ps -ef | grep -v 'grep' | grep 'vsftpd {0}' || vsftpd {0}".format(self.VSFTPD_CONF_PATH))
         if ret != 0:
             logger.error("failed to start vsftpd on baremetal pxeserver[uuid:%s]" % self.uuid)
             return ret
