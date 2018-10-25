@@ -4,11 +4,7 @@ import os
 import os.path
 import pprint
 import traceback
-import fcntl
-import shutil
-import socket
-import struct
-from netaddr import IPNetwork
+from netaddr import IPNetwork, IPAddress
 
 import zstacklib.utils.daemon as daemon
 import zstacklib.utils.http as http
@@ -18,6 +14,8 @@ from imagestore import ImageStoreClient
 
 logger = log.get_logger(__name__)
 
+class PxeServerError(Exception):
+    '''baremetal pxeserver error'''
 
 class AgentResponse(object):
     def __init__(self, success=True, error=None):
@@ -139,62 +137,32 @@ class PxeServerAgent(object):
     def _start_pxe_server(self):
         ret = bash_r("ps -ef | grep -v 'grep' | grep 'dnsmasq -C {0}' || dnsmasq -C {0}".format(self.DNSMASQ_CONF_PATH))
         if ret != 0:
-            logger.error("failed to start dnsmasq on baremetal pxeserver[uuid:%s]" % self.uuid)
-            return ret
+            raise PxeServerError("failed to start dnsmasq on baremetal pxeserver[uuid:%s]" % self.uuid)
 
         ret = bash_r("ps -ef | grep -v 'grep' | grep 'vsftpd {0}' || vsftpd {0}".format(self.VSFTPD_CONF_PATH))
         if ret != 0:
-            logger.error("failed to start vsftpd on baremetal pxeserver[uuid:%s]" % self.uuid)
-            return ret
+            raise PxeServerError("failed to start vsftpd on baremetal pxeserver[uuid:%s]" % self.uuid)
 
         ret = bash_r("ps -ef | grep -v 'grep' | grep 'websockify' | grep 'baremetal' || "
                      "python %s/utils/websockify/run --web %s --token-plugin TokenFile --token-source=%s -D 6080"
                      % (self.NOVNC_INSTALL_PATH, self.NOVNC_INSTALL_PATH, self.NOVNC_TOKEN_PATH))
         if ret != 0:
-            logger.error("failed to start noVNC on baremetal pxeserver[uuid:%s]" % self.uuid)
-            return ret
+            raise PxeServerError("failed to start noVNC on baremetal pxeserver[uuid:%s]" % self.uuid)
 
         ret = bash_r("systemctl start nginx")
         if ret != 0:
-            logger.error("failed to start nginx on baremetal pxeserver[uuid:%s]" % self.uuid)
-            return ret
-        return 0
+            raise PxeServerError("failed to start nginx on baremetal pxeserver[uuid:%s]" % self.uuid)
 
     # we do not stop nginx on pxeserver because it may be needed by bm with terminal proxy
     # stop pxeserver means stop dnsmasq actually
     def _stop_pxe_server(self):
-        bash_r("pkill -9 vsftpd")
-        bash_r("kill -9 `ps -ef | grep -v grep | grep websockify | awk '{ print $2 }'`")
-
-        ret = bash_r("pkill -9 dnsmasq")
-        if ret != 0:
-            logger.error("failed to stop dnsmasq on baremetal pxeserver[uuid:%s]" % self.uuid)
-            return ret
-        return 0
+        bash_r("kill -9 `ps -ef | grep -v grep | grep 'vsftpd {0}'`".format(self.VSFTPD_CONF_PATH))
+        bash_r("kill -9 `ps -ef | grep -v grep | grep websockify | grep baremetal | awk '{ print $2 }'`")
+        bash_r("kill -9 `ps -ef | grep -v grep | grep 'dnsmasq -C {0}`".format(self.DNSMASQ_CONF_PATH))
 
     @staticmethod
-    def _get_ip_address(ifname):
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        return socket.inet_ntoa(fcntl.ioctl(
-            s.fileno(),
-            0x8915,  # SIOCGIFADDR
-            struct.pack('256s', ifname[:15])
-        )[20:24])
-
-    @staticmethod
-    def _get_ip_netmask(ifname):
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        return socket.inet_ntoa(fcntl.ioctl(
-            s.fileno(),
-            0x891b,  # SIOCGIFNETMASK
-            struct.pack('256s', ifname[:15])
-        )[20:24])
-
-    @staticmethod
-    def _get_mac_address(ifname):
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        info = fcntl.ioctl(s.fileno(), 0x8927, struct.pack('256s', ifname[:15]))
-        return ':'.join(['%02x' % ord(char) for char in info[18:24]])
+    def _is_belong_to_same_subnet(addr1, addr2, netmask):
+        return IPAddress(addr1) in IPNetwork("%s/%s" % (addr2, netmask))
 
     @reply_error
     def echo(self, req):
@@ -207,6 +175,13 @@ class PxeServerAgent(object):
         rsp = AgentResponse()
         self.uuid = cmd.uuid
         self.storage_path = cmd.storagePath
+
+        # check dhcp interface and dhcp range
+        pxeserver_dhcp_nic_ip = linux.get_device_ip(cmd.dhcpInterface)
+        pxeserver_dhcp_nic_nm = linux.get_netmask_of_nic(cmd.dhcpInterface)
+        if not self._is_belong_to_same_subnet(cmd.dhcpRangeBegin, pxeserver_dhcp_nic_ip, pxeserver_dhcp_nic_ip) or \
+                not self._is_belong_to_same_subnet(cmd.dhcpRangeEnd, pxeserver_dhcp_nic_ip, pxeserver_dhcp_nic_nm):
+            raise PxeServerError("%s ~ %s cannot connect to dhcp interface %s" % (cmd.dhcpRangeBegin, cmd.dhcpRangeEnd, cmd.dhcpInterface))
 
         # get pxe server capacity
         self._set_capacity_to_response(rsp)
@@ -254,7 +229,6 @@ xferlog_file={VSFTPD_LOG_PATH}
         os.chown(self.VSFTPD_CONF_PATH, 0, 0)
 
         # init pxelinux.cfg
-        pxeserver_dhcp_nic_ip = self._get_ip_address(cmd.dhcpInterface)
         pxelinux_cfg = """default zstack_baremetal
 prompt 0
 label zstack_baremetal
@@ -270,7 +244,7 @@ append initrd=zstack/initrd.img devfs=nomount ksdevice=bootif ks=ftp://{PXESERVE
         with open("%s/inspector_ks_tmpl" % ks_tmpl_path, 'r') as fr:
             inspector_ks_cfg = fr.read() \
                 .replace("PXESERVERUUID", cmd.uuid) \
-                .replace("PXESERVER_DHCP_NIC_IP", self._get_ip_address(cmd.dhcpInterface))
+                .replace("PXESERVER_DHCP_NIC_IP", pxeserver_dhcp_nic_ip)
             with open(self.INSPECTOR_KS_CFG, 'w') as fw:
                 fw.write(inspector_ks_cfg)
 
@@ -330,15 +304,11 @@ http {
         if not os.path.exists(self.NOVNC_INSTALL_PATH):
             ret = bash_r("tar -xf %s -C %s" % (os.path.join(self.BAREMETAL_LIB_PATH, "noVNC.tar.gz"), self.BAREMETAL_LIB_PATH))
             if ret != 0:
-                rsp.success = False
-                rsp.error = "failed to install noVNC on baremetal pxeserver[uuid:%s]" % self.uuid
-                return json_object.dumps(rsp)
+                raise PxeServerError("failed to install noVNC on baremetal pxeserver[uuid:%s]" % self.uuid)
         os.chmod(self.NOVNC_TOKEN_PATH, 0777)
 
         # start pxe services
-        if self._start_pxe_server() != 0:
-            rsp.success = False
-            rsp.error = "failed to start baremetal pxeserver[uuid:%s]" % self.uuid
+        self._start_pxe_server()
 
         logger.info("successfully inited and started baremetal pxeserver[uuid:%s]" % self.uuid)
         return json_object.dumps(rsp)
@@ -355,8 +325,11 @@ http {
         rsp = AgentResponse()
         self.uuid = cmd.uuid
         self.storage_path = cmd.storagePath
+
+        # check storage path
         if os.path.isfile(self.storage_path):
-            raise Exception('storage path: %s is a file' % self.storage_path)
+            raise PxeServerError('storage path: %s is a file' % self.storage_path)
+
         if not os.path.exists(self.storage_path):
             os.makedirs(self.storage_path, 0777)
 
@@ -374,9 +347,7 @@ http {
         cmd = json_object.loads(req[http.REQUEST_BODY])
         rsp = AgentResponse()
         self.uuid = cmd.uuid
-        if self._start_pxe_server() != 0:
-            rsp.success = False
-            rsp.error = "failed to start baremetal pxeserver[uuid:%s]" % self.uuid
+        self._start_pxe_server()
 
         logger.info("successfully started baremetal pxeserver[uuid:%s]")
         return json_object.dumps(rsp)
@@ -387,9 +358,7 @@ http {
         cmd = json_object.loads(req[http.REQUEST_BODY])
         rsp = AgentResponse()
         self.uuid = cmd.uuid
-        if self._stop_pxe_server() != 0:
-            rsp.success = False
-            rsp.error = "failed to stop baremetal pxeserver[uuid:%s]" % self.uuid
+        self._stop_pxe_server()
 
         logger.info("successfully stopped baremetal pxeserver[uuid:%s]")
         return json_object.dumps(rsp)
@@ -402,6 +371,7 @@ http {
         self.dhcp_interface = cmd.dhcpInterface
 
         # create ks.cfg
+        pxeserver_dhcp_nic_ip = linux.get_device_ip(cmd.dhcpInterface)
         ks_cfg_name = cmd.pxeNicMac.replace(":", "-")
         ks_cfg_file = os.path.join(self.KS_CFG_PATH, ks_cfg_name)
         ks_tmpl_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'ks_tmpl')
@@ -409,7 +379,7 @@ http {
         with open("%s/generic_ks_tmpl" % ks_tmpl_path, 'r') as fr:
             generic_ks_cfg = fr.read() \
                 .replace("EXTRA_REPO", "" if is_zstack_iso else "repo --name=qemu-kvm-ev --baseurl=ftp://PXESERVER_DHCP_NIC_IP/zstack-dvd/Extra/qemu-kvm-ev") \
-                .replace("PXESERVER_DHCP_NIC_IP", self._get_ip_address(cmd.dhcpInterface)) \
+                .replace("PXESERVER_DHCP_NIC_IP", pxeserver_dhcp_nic_ip) \
                 .replace("BMUUID", cmd.bmUuid) \
                 .replace("IMAGEUUID", cmd.imageUuid) \
                 .replace("ROOT_PASSWORD", "rootpw --iscrypted " + cmd.customPassword) \
@@ -418,7 +388,6 @@ http {
                 fw.write(generic_ks_cfg)
 
         # create pxelinux.cfg
-        pxeserver_dhcp_nic_ip = self._get_ip_address(cmd.dhcpInterface)
         pxe_cfg_file = os.path.join(self.PXELINUX_CFG_PATH, "01-" + ks_cfg_name)
         pxelinux_cfg = """default {IMAGEUUID}
 prompt 0
@@ -506,8 +475,7 @@ append initrd={IMAGEUUID}/initrd.img devfs=nomount ksdevice=bootif ks=ftp://{PXE
         # download
         rsp = self.imagestore_client.download_image_from_imagestore(cmd)
         if not rsp.success:
-            self._set_capacity_to_response(rsp)
-            return json_object.dumps(rsp)
+            raise PxeServerError("failed to download image[uuid:%s] from imagestore to baremetal image cache" % cmd.imageUuid)
 
         # mount
         cache_path = cmd.cacheInstallPath
@@ -516,17 +484,16 @@ append initrd={IMAGEUUID}/initrd.img devfs=nomount ksdevice=bootif ks=ftp://{PXE
             os.makedirs(mount_path)
         ret = bash_r("mount %s %s" % (cache_path, mount_path))
         if ret != 0:
-            rsp.success = False
-            rsp.error = "failed to mount image[uuid:%s] to baremetal cache %s" % (cmd.imageUuid, cache_path)
-            self._set_capacity_to_response(rsp)
-            return json_object.dumps(rsp)
+            raise PxeServerError("failed to mount image[uuid:%s] to baremetal ftp server %s" % (cmd.imageUuid, cache_path))
 
         # copy vmlinuz etc.
         vmlinuz_path = os.path.join(self.TFTPBOOT_PATH, cmd.imageUuid)
         if not os.path.exists(vmlinuz_path):
             os.makedirs(vmlinuz_path)
-        bash_r("cp %s %s" % (mount_path + "isolinux/vmlinuz*", os.path.join(vmlinuz_path + "vmlinuz")))
-        bash_r("cp %s %s" % (mount_path + "isolinux/initrd*.img", os.path.join(vmlinuz_path + "initrd.img")))
+        ret1 = bash_r("cp %s %s" % (mount_path + "isolinux/vmlinuz*", os.path.join(vmlinuz_path + "vmlinuz")))
+        ret2 = bash_r("cp %s %s" % (mount_path + "isolinux/initrd*.img", os.path.join(vmlinuz_path + "initrd.img")))
+        if ret1 != 0 or ret2 != 0:
+            raise PxeServerError("failed to copy vmlinuz and initrd.img from image[uuid:%s] to baremetal tftp server" % cmd.imageUuid)
 
         logger.info("successfully downloaded image[uuid:%s] and mounted it" % cmd.imageUuid)
         self._set_capacity_to_response(rsp)
@@ -571,8 +538,7 @@ append initrd={IMAGEUUID}/initrd.img devfs=nomount ksdevice=bootif ks=ftp://{PXE
         mount_path = os.path.join(self.VSFTPD_ROOT_PATH, cmd.imageUuid)
         ret = bash_r("mount | grep %s || mount %s %s" % (mount_path, cache_path, mount_path))
         if ret != 0:
-            rsp.success = False
-            rsp.error = "failed to mount baremetal cache of image[uuid:%s]" % cmd.imageUuid
+            raise PxeServerError("failed to mount baremetal cache of image[uuid:%s]" % cmd.imageUuid)
 
         return json_object.dumps(rsp)
 
