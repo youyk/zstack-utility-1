@@ -149,7 +149,8 @@ class PxeServerAgent(object):
         if ret != 0:
             raise PxeServerError("failed to start noVNC on baremetal pxeserver[uuid:%s]" % self.uuid)
 
-        ret = bash_r("systemctl start nginx")
+        # in case nginx config is updated during nginx running
+        ret = bash_r("systemctl start nginx && systemctl reload nginx")
         if ret != 0:
             raise PxeServerError("failed to start nginx on baremetal pxeserver[uuid:%s]" % self.uuid)
 
@@ -177,8 +178,8 @@ class PxeServerAgent(object):
         self.storage_path = cmd.storagePath
 
         # check dhcp interface and dhcp range
-        pxeserver_dhcp_nic_ip = linux.get_device_ip(cmd.dhcpInterface)
-        pxeserver_dhcp_nic_nm = linux.get_netmask_of_nic(cmd.dhcpInterface)
+        pxeserver_dhcp_nic_ip = linux.get_device_ip(cmd.dhcpInterface).strip()
+        pxeserver_dhcp_nic_nm = linux.get_netmask_of_nic(cmd.dhcpInterface).strip()
         if not self._is_belong_to_same_subnet(cmd.dhcpRangeBegin, pxeserver_dhcp_nic_ip, pxeserver_dhcp_nic_nm) or \
                 not self._is_belong_to_same_subnet(cmd.dhcpRangeEnd, pxeserver_dhcp_nic_ip, pxeserver_dhcp_nic_nm):
             raise PxeServerError("%s ~ %s cannot connect to dhcp interface %s" % (cmd.dhcpRangeBegin, cmd.dhcpRangeEnd, cmd.dhcpInterface))
@@ -371,14 +372,14 @@ http {
         self.dhcp_interface = cmd.dhcpInterface
 
         # create ks.cfg
-        pxeserver_dhcp_nic_ip = linux.get_device_ip(cmd.dhcpInterface)
+        pxeserver_dhcp_nic_ip = linux.get_device_ip(cmd.dhcpInterface).strip()
         ks_cfg_name = cmd.pxeNicMac.replace(":", "-")
         ks_cfg_file = os.path.join(self.KS_CFG_PATH, ks_cfg_name)
         ks_tmpl_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'ks_tmpl')
         is_zstack_iso = os.path.exists(os.path.join(self.VSFTPD_ROOT_PATH, cmd.imageUuid, "Extra", "qemu-kvm-ev"))
         with open("%s/generic_ks_tmpl" % ks_tmpl_path, 'r') as fr:
             generic_ks_cfg = fr.read() \
-                .replace("EXTRA_REPO", "" if is_zstack_iso else "repo --name=qemu-kvm-ev --baseurl=ftp://PXESERVER_DHCP_NIC_IP/zstack-dvd/Extra/qemu-kvm-ev") \
+                .replace("EXTRA_REPO", "repo --name=qemu-kvm-ev --baseurl=ftp://%s/zstack-dvd/Extra/qemu-kvm-ev" % pxeserver_dhcp_nic_ip if is_zstack_iso else "") \
                 .replace("PXESERVER_DHCP_NIC_IP", pxeserver_dhcp_nic_ip) \
                 .replace("BMUUID", cmd.bmUuid) \
                 .replace("IMAGEUUID", cmd.imageUuid) \
