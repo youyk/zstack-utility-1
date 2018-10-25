@@ -179,7 +179,7 @@ class PxeServerAgent(object):
         # check dhcp interface and dhcp range
         pxeserver_dhcp_nic_ip = linux.get_device_ip(cmd.dhcpInterface)
         pxeserver_dhcp_nic_nm = linux.get_netmask_of_nic(cmd.dhcpInterface)
-        if not self._is_belong_to_same_subnet(cmd.dhcpRangeBegin, pxeserver_dhcp_nic_ip, pxeserver_dhcp_nic_ip) or \
+        if not self._is_belong_to_same_subnet(cmd.dhcpRangeBegin, pxeserver_dhcp_nic_ip, pxeserver_dhcp_nic_nm) or \
                 not self._is_belong_to_same_subnet(cmd.dhcpRangeEnd, pxeserver_dhcp_nic_ip, pxeserver_dhcp_nic_nm):
             raise PxeServerError("%s ~ %s cannot connect to dhcp interface %s" % (cmd.dhcpRangeBegin, cmd.dhcpRangeEnd, cmd.dhcpInterface))
 
