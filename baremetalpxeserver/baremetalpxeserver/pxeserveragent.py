@@ -157,9 +157,9 @@ class PxeServerAgent(object):
     # we do not stop nginx on pxeserver because it may be needed by bm with terminal proxy
     # stop pxeserver means stop dnsmasq actually
     def _stop_pxe_server(self):
-        bash_r("kill -9 `ps -ef | grep -v grep | grep 'vsftpd {0}'`".format(self.VSFTPD_CONF_PATH))
+        bash_r("kill -9 `ps -ef | grep -v grep | grep 'vsftpd %s' | awk '{ print $2 }'`" % self.VSFTPD_CONF_PATH)
         bash_r("kill -9 `ps -ef | grep -v grep | grep websockify | grep baremetal | awk '{ print $2 }'`")
-        bash_r("kill -9 `ps -ef | grep -v grep | grep 'dnsmasq -C {0}`".format(self.DNSMASQ_CONF_PATH))
+        bash_r("kill -9 `ps -ef | grep -v grep | grep 'dnsmasq -C %s' | awk '{ print $2 }'`" % self.DNSMASQ_CONF_PATH)
 
     @staticmethod
     def _is_belong_to_same_subnet(addr1, addr2, netmask):
@@ -361,7 +361,7 @@ http {
         self.uuid = cmd.uuid
         self._stop_pxe_server()
 
-        logger.info("successfully stopped baremetal pxeserver[uuid:%s]")
+        logger.info("successfully stopped baremetal pxeserver[uuid:%s]" % self.uuid)
         return json_object.dumps(rsp)
 
     @reply_error
