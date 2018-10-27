@@ -483,7 +483,7 @@ append initrd={IMAGEUUID}/initrd.img devfs=nomount ksdevice=bootif ks=ftp://{PXE
         mount_path = os.path.join(self.VSFTPD_ROOT_PATH, cmd.imageUuid)
         if not os.path.exists(mount_path):
             os.makedirs(mount_path)
-        ret = bash_r("mount %s %s" % (cache_path, mount_path))
+        ret = bash_r("mount | grep %s || mount %s %s" % (mount_path, cache_path, mount_path))
         if ret != 0:
             raise PxeServerError("failed to mount image[uuid:%s] to baremetal ftp server %s" % (cmd.imageUuid, cache_path))
 
@@ -515,15 +515,14 @@ append initrd={IMAGEUUID}/initrd.img devfs=nomount ksdevice=bootif ks=ftp://{PXE
 
         # rm vmlinuz etc.
         vmlinuz_path = os.path.join(self.TFTPBOOT_PATH, cmd.imageUuid)
-        os.rmdir(vmlinuz_path)
+        bash_r("rm -rf %s" % vmlinuz_path)
 
         # umount
         mount_path = os.path.join(self.VSFTPD_ROOT_PATH, cmd.imageUuid)
-        bash_r("umount %s" % mount_path)
-        os.rmdir(mount_path)
+        bash_r("umount {0}; rm -rf {0}".format(mount_path))
 
         # rm image cache
-        os.rmdir(os.path.pardir(cmd.cacheInstallPath))
+        bash_r("rm -rf %s" % os.path.pardir(cmd.cacheInstallPath))
 
         logger.info("successfully umounted and deleted cache of image[uuid:%s]" % cmd.imageUuid)
         self._set_capacity_to_response(rsp)
