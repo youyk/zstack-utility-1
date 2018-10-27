@@ -379,7 +379,7 @@ http {
         is_zstack_iso = os.path.exists(os.path.join(self.VSFTPD_ROOT_PATH, cmd.imageUuid, "Extra", "qemu-kvm-ev"))
         with open("%s/generic_ks_tmpl" % ks_tmpl_path, 'r') as fr:
             generic_ks_cfg = fr.read() \
-                .replace("EXTRA_REPO", "repo --name=qemu-kvm-ev --baseurl=ftp://%s/zstack-dvd/Extra/qemu-kvm-ev" % pxeserver_dhcp_nic_ip if is_zstack_iso else "") \
+                .replace("EXTRA_REPO", "repo --name=qemu-kvm-ev --baseurl=ftp://%s/%s/Extra/qemu-kvm-ev" % (pxeserver_dhcp_nic_ip, cmd.imageUuid) if is_zstack_iso else "") \
                 .replace("PXESERVER_DHCP_NIC_IP", pxeserver_dhcp_nic_ip) \
                 .replace("BMUUID", cmd.bmUuid) \
                 .replace("IMAGEUUID", cmd.imageUuid) \
@@ -491,8 +491,8 @@ append initrd={IMAGEUUID}/initrd.img devfs=nomount ksdevice=bootif ks=ftp://{PXE
         vmlinuz_path = os.path.join(self.TFTPBOOT_PATH, cmd.imageUuid)
         if not os.path.exists(vmlinuz_path):
             os.makedirs(vmlinuz_path)
-        ret1 = bash_r("cp %s %s" % (mount_path + "isolinux/vmlinuz*", os.path.join(vmlinuz_path + "vmlinuz")))
-        ret2 = bash_r("cp %s %s" % (mount_path + "isolinux/initrd*.img", os.path.join(vmlinuz_path + "initrd.img")))
+        ret1 = bash_r("cp %s %s" % (os.path.join(mount_path, "isolinux/vmlinuz*"), os.path.join(vmlinuz_path, "vmlinuz")))
+        ret2 = bash_r("cp %s %s" % (os.path.join(mount_path, "isolinux/initrd*.img"), os.path.join(vmlinuz_path, "initrd.img")))
         if ret1 != 0 or ret2 != 0:
             raise PxeServerError("failed to copy vmlinuz and initrd.img from image[uuid:%s] to baremetal tftp server" % cmd.imageUuid)
 

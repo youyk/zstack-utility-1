@@ -2030,6 +2030,11 @@ http {
     include             /etc/nginx/mime.types;
     default_type        application/octet-stream;
 
+    map \$http_upgrade \$connection_upgrade {
+        default upgrade;
+        ''      close;
+    }
+
     server {
         listen 8090;
         include /etc/nginx/conf.d/8090/*;
@@ -2038,8 +2043,8 @@ http {
 EOF
 iptables-save | grep -- "-A INPUT -p tcp -m tcp --dport 8090 -j ACCEPT" > /dev/null 2>&1 || iptables -I INPUT -p tcp -m tcp --dport 8090 -j ACCEPT >/dev/null 2>&1
 service iptables save >/dev/null 2>&1
-systemctl enable nginx > /dev/null
-systemctl start nginx > /dev/null
+systemctl enable nginx > /dev/null 2>&1
+systemctl start nginx > /dev/null 2>&1
 }
 
 cs_setup_http(){
