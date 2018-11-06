@@ -368,9 +368,11 @@ udpate_tomcat_info() {
     ## update catalina.jar/ServerInfo.properties
     jar_file=$ZSTACK_INSTALL_ROOT/apache-tomcat/lib/catalina.jar
 
+    work_path=$PWD
     temp_path=`mktemp`
     rm -f $temp_path
     mkdir -p $temp_path
+
     cd $temp_path
     jar xvf $jar_file > /dev/nul
     if [ $? -eq 0 ]; then
@@ -389,7 +391,9 @@ udpate_tomcat_info() {
     else
         echo "Unzip $jar_file error."
     fi
+
     rm -rf $temp_path
+    cd $work_path
 }
 
 set_tomcat_config() {
