@@ -1144,6 +1144,7 @@ is_install_general_libs_rh(){
     # Just install what is not installed
     deps_list="libselinux-python \
             java-1.8.0-openjdk \
+            java-1.8.0-openjdk-devel \
             bridge-utils \
             wget \
             nfs-utils \
