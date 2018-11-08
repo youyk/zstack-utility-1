@@ -11,6 +11,7 @@ import traceback
 import xml.etree.ElementTree as etree
 import re
 import platform
+import netaddr
 
 import libvirt
 #from typing import List, Any, Union
@@ -1646,6 +1647,16 @@ class Vm(object):
             volume_native_aio(disk)
             return etree.tostring(disk)
 
+        def scsilun_volume():
+            disk = etree.Element('disk', attrib={'type': 'block', 'device': 'lun', 'sgio': 'unfiltered'})
+            e(disk, 'driver', None,
+              {'name': 'qemu', 'type': 'raw'})
+            e(disk, 'source', None, {'dev': volume.installPath})
+            e(disk, 'target', None, {'dev': 'sd%s' % self.DEVICE_LETTERS[volume.deviceId], 'bus': 'scsi'})
+            e(disk, 'shareable', None, )
+            #NOTE(weiw): scsi lun not support aio or qos
+            return etree.tostring(disk)
+
         def iscsibased_volume():
             def virtio_iscsi():
                 vi = VirtioIscsi()
@@ -1759,6 +1770,8 @@ class Vm(object):
             xml = ceph_volume()
         elif volume.deviceType == 'fusionstor':
             xml = fusionstor_volume()
+        elif volume.deviceType == 'scsilun':
+            xml = scsilun_volume()
         else:
             raise Exception('unsupported volume deviceType[%s]' % volume.deviceType)
 
@@ -1790,6 +1803,10 @@ class Vm(object):
                         elif volume.deviceType == 'fusionstor':
                             if xmlobject.has_element(disk,
                                                      'source') and disk.source.name__ and disk.source.name_ in volume.installPath:
+                                return True
+                        elif volume.deviceType == 'scsilun':
+                            if xmlobject.has_element(disk,
+                                                     'source') and disk.source.dev__ and volume.installPath in disk.source.dev_:
                                 return True
 
                     logger.debug('volume[%s] is still in process of attaching, wait it' % volume.installPath)
@@ -1831,7 +1848,7 @@ class Vm(object):
         assert volume.deviceId != 0, 'how can root volume gets detached???'
 
         def get_disk_name():
-            if volume.deviceType == 'iscsi':
+            if volume.deviceType in ['iscsi', 'scsilun']:
                 fmt = 'sd%s'
             elif volume.deviceType in ['file', 'ceph', 'fusionstor']:
                 fmt = ('hd%s', 'vd%s', 'sd%s')[max(volume.useVirtio, volume.useVirtioSCSI * 2)]
@@ -1896,6 +1913,12 @@ class Vm(object):
                         elif volume.deviceType == 'fusionstor':
                             if xmlobject.has_element(disk,
                                                      'source') and disk.source.name__ and disk.source.name_ in volume.installPath:
+                                logger.debug(
+                                    'volume[%s] is still in process of detaching, wait for it' % volume.installPath)
+                                return False
+                        elif volume.deviceType == 'scsilun':
+                            if xmlobject.has_element(disk,
+                                                     'source') and disk.source.dev__ and volume.installPath in disk.source.dev__:
                                 logger.debug(
                                     'volume[%s] is still in process of detaching, wait for it' % volume.installPath)
                                 return False
@@ -2447,7 +2470,7 @@ class Vm(object):
                 self.domain.detachDevice(xml)
 
             if not linux.wait_callback_success(check_device, interval=0.5, timeout=10):
-                raise Exception('nic device is still attached after 10 seconds')
+                raise Exception('NIC device is still attached after 10 seconds. Please check virtio driver or stop VM and detach again.')
         except:
             # check one more time
             if not check_device(None):
@@ -2630,7 +2653,7 @@ class Vm(object):
                     cpu = e(root, 'cpu', attrib={'mode': 'host-passthrough'})
                     e(cpu, 'model', attrib={'fallback': 'allow'})
                 elif cmd.nestedVirtualization == 'custom':
-                    cpu = e(root, 'cpu', attrib={'mode': 'custom'})
+                    cpu = e(root, 'cpu', attrib={'mode': 'custom', 'match': 'minimum'})
                     e(cpu, 'model', cmd.vmCpuModel, attrib={'fallback': 'allow'})
                 elif IS_AARCH64:
                     cpu = e(root, 'cpu', attrib={'mode': 'host-passthrough'})
@@ -3113,9 +3136,24 @@ class Vm(object):
             if pciDevices:
                 make_pci_device(pciDevices)
 
+            storageDevices = cmd.addons['storageDevice']
+            if storageDevices:
+                make_storage_device(storageDevices)
+
             usbDevices = cmd.addons['usbDevice']
             if usbDevices:
                 make_usb_device(usbDevices)
+
+        def make_storage_device(storageDevices):
+            lvm.unpriv_sgio()
+            devices = elements['devices']
+            for volume in storageDevices:
+                if match_storage_device(volume.installPath):
+                    disk = e(devices, 'disk', None, attrib={'type': 'block', 'device': 'lun', 'sgio': 'unfiltered'})
+                    e(disk, 'driver', None, {'name': 'qemu', 'type': 'raw'})
+                    e(disk, 'source', None, {'dev': volume.installPath})
+                    e(disk, 'target', None, {'dev': 'sd%s' % Vm.DEVICE_LETTERS[volume.deviceId], 'bus': 'scsi'})
+                    e(disk, 'shareable', None, )
 
         def make_pci_device(addresses):
             devices = elements['devices']
@@ -3172,6 +3210,10 @@ class Vm(object):
                         raise kvmagent.KvmError('unknown usb controller %s', bus)
                 else:
                     raise kvmagent.KvmError('cannot find usb device %s', usb)
+
+        #TODO(weiw) validate here
+        def match_storage_device(install_path):
+            return True
 
         # TODO(WeiW) Validate here
         def match_pci_device(addr):
@@ -3250,8 +3292,11 @@ class Vm(object):
         e(interface, 'target', None, attrib={'dev': nic.nicInternalName})
         e(interface, 'alias', None, {'name': 'net%s' % nic.nicInternalName.split('.')[1]})
         if nic.ip:
-            filterref = e(interface, 'filterref', None, {'filter': 'clean-traffic'})
-            e(filterref, 'parameter', None, {'name': 'IP', 'value': nic.ip})
+            # TODO shixin ipv6 clean-traffic will be fix in next release
+            nicIp = netaddr.IPAddress(nic.ip)
+            if nicIp.version == 4:
+                filterref = e(interface, 'filterref', None, {'filter': 'clean-traffic'})
+                e(filterref, 'parameter', None, {'name': 'IP', 'value': nic.ip})
         if nic.useVirtio:
             e(interface, 'model', None, attrib={'type': 'virtio'})
         else:
@@ -3538,6 +3583,10 @@ class VmPlugin(kvmagent.KvmAgent):
         cmd = jsonobject.loads(req[http.REQUEST_BODY])
         rsp = kvmagent.AgentResponse()
         device_id = self._get_device(cmd.installPath, cmd.vmUuid)
+        if device_id is None:
+            rsp.success = False
+            rsp.error = "Volume is not ready, is it being attached?"
+            return jsonobject.dumps(rsp)
 
         ## total and read/write of bytes_sec cannot be set at the same time
         ## http://confluence.zstack.io/pages/viewpage.action?pageId=42599772#comment-42600879
@@ -4317,7 +4366,8 @@ class VmPlugin(kvmagent.KvmAgent):
             rsp.error = str(e)
             rsp.success = False
         finally:
-            linux.fumount(d)
+            for i in xrange(6):
+                linux.fumount(d, 5)
             linux.rmdir_if_empty(d)
 
         return jsonobject.dumps(rsp)
@@ -4360,7 +4410,8 @@ class VmPlugin(kvmagent.KvmAgent):
             rsp.success = False
 
         finally:
-            linux.fumount(d)
+            for i in xrange(6):
+                linux.fumount(d, 5)
             linux.rmdir_if_empty(d)
 
         return jsonobject.dumps(rsp)

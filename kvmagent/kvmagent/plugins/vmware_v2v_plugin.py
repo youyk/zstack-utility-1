@@ -62,6 +62,13 @@ class VMwareV2VPlugin(kvmagent.KvmAgent):
     def init(self, req):
         cmd = jsonobject.loads(req[http.REQUEST_BODY])
         rsp = AgentRsp()
+
+        cmdstr = 'cd /usr/local/zstack && wget -c {} -O zstack-windows-virtio-driver.iso'.format(cmd.virtioDriverUrl)
+        if shell.run(cmdstr) != 0:
+            rsp.success = False
+            rsp.error = "failed to download zstack-windows-virtio-driver.iso from management node to v2v conversion host"
+            return jsonobject.dumps(rsp)
+
         cmdstr = 'which docker || yum --disablerepo=* --enablerepo={0} clean all; yum --disablerepo=* --enablerepo={0} install docker -y'.format(cmd.zstackRepo)
         if shell.run(cmdstr) != 0:
             rsp.success = False
@@ -82,12 +89,6 @@ class VMwareV2VPlugin(kvmagent.KvmAgent):
         if shell.run(cmdstr) != 0:
             rsp.success = False
             rsp.error = "failed to import virt_v2v_image to docker in v2v conversion host"
-            return jsonobject.dumps(rsp)
-
-        cmdstr = 'cd /usr/local/zstack && wget -c {} -O zstack-windows-virtio-driver.iso'.format(cmd.virtioDriverUrl)
-        if shell.run(cmdstr) != 0:
-            rsp.success = False
-            rsp.error = "failed to download zstack-windows-virtio-driver.iso from management node to v2v conversion host"
             return jsonobject.dumps(rsp)
 
         return jsonobject.dumps(rsp)
@@ -150,6 +151,7 @@ class VMwareV2VPlugin(kvmagent.KvmAgent):
 
         def run_convert_if_need():
             def do_run():
+                self.check_docker()
                 save_pid()
                 ret = shell.run(echo_pid_cmd)
                 new_task.current_process_return_code = ret
@@ -214,6 +216,11 @@ class VMwareV2VPlugin(kvmagent.KvmAgent):
             rsp.bootMode = 'UEFI'
 
         return jsonobject.dumps(rsp)
+
+    def check_docker(self):
+        if shell.run("ip addr show docker0 > /dev/null && /sbin/iptables-save | grep -q 'FORWARD.*docker0'") != 0:
+            logger.warn("cannot find docker iptables rule, restart docker server!")
+            shell.run("systemctl restart docker")
 
     def _check_str_in_file(self, fname, txt):
         with open(fname) as dataf:

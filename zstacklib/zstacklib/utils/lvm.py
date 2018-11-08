@@ -100,7 +100,7 @@ def get_block_devices():
     if cmd.return_code == 0 and cmd.stdout.strip() != "":
         mpath_devices = cmd.stdout.strip().split("\n")
 
-    for mpath_device in mpath_devices:
+    for mpath_device in mpath_devices:  # type: str
         try:
             cmd = shell.ShellCmd("realpath /dev/mapper/%s | grep -E -o 'dm-.*'" % mpath_device)
             cmd(is_exception=False)
@@ -111,8 +111,7 @@ def get_block_devices():
             slaves = shell.call("ls /sys/class/block/%s/slaves/" % dm).strip().split("\n")
             if slaves is None or len(slaves) == 0:
                 struct = SharedBlockCandidateStruct()
-                cmd = shell.ShellCmd("multipath -l /dev/mapper/%s | grep %s | grep -o ' (.*) '" % (
-                    mpath_device, mpath_device))
+                cmd = shell.ShellCmd("udevadm info -n %s | grep dm-uuid-mpath | grep -o 'dm-uuid-mpath-\S*' | head -n 1 | awk -F '-' '{print $NF}'" % dm)
                 cmd(is_exception=True)
                 struct.wwids = [cmd.stdout.strip().strip("()")]
                 struct.type = "mpath"
@@ -120,8 +119,7 @@ def get_block_devices():
                 continue
 
             struct = get_device_info(slaves[0])
-            cmd = shell.ShellCmd("multipath -l /dev/mapper/%s | grep %s | grep -o ' (.*) '" % (
-                mpath_device, mpath_device))
+            cmd = shell.ShellCmd("udevadm info -n %s | grep dm-uuid-mpath | grep -o 'dm-uuid-mpath-\S*' | head -n 1 | awk -F '-' '{print $NF}'" % dm)
             cmd(is_exception=True)
             struct.wwids = [cmd.stdout.strip().strip("()")]
             struct.type = "mpath"
@@ -445,6 +443,7 @@ def get_wwid(disk_path):
     return cmd.stdout.strip()
 
 
+@bash.in_bash
 def backup_super_block(disk_path):
     wwid = get_wwid(disk_path)
     if wwid is None or wwid == "":
@@ -452,40 +451,37 @@ def backup_super_block(disk_path):
 
     current_time = time.time()
     disk_back_file = os.path.join(LVM_CONFIG_BACKUP_PATH, "%s.%s.%s" % (wwid, SUPER_BLOCK_BACKUP, current_time))
-    cmd = shell.ShellCmd("dd if=%s of=%s bs=64KB count=1 conv=notrunc" % (disk_path, disk_back_file))
-    cmd(is_exception=False)
+    bash.bash_roe("dd if=%s of=%s bs=64KB count=1 conv=notrunc" % (disk_path, disk_back_file))
+    return disk_back_file
 
 
 @bash.in_bash
 def wipe_fs(disks, expected_vg=None):
     for disk in disks:
         exists_vg = None
-        cmd = shell.ShellCmd("pvdisplay %s | grep %s" % (disk, expected_vg))
-        cmd(is_exception=False)
-        if cmd.return_code == 0:
+        r = bash.bash_r("pvdisplay %s | grep %s" % (disk, expected_vg))
+        if r == 0:
             continue
 
         r, o = bash.bash_ro("pvs --nolocking --noheading -o vg_name %s" % disk)
         if r == 0 and o.strip() != "":
             exists_vg = o.strip()
 
-        backup_super_block(disk)
+        backup = backup_super_block(disk)
+        if bash.bash_r("grep %s %s" % (expected_vg, backup)) == 0:
+            raise Exception("found vg uuid in superblock backup while not found in lvm command!")
         need_flush_mpath = False
 
-        cmd_part = shell.ShellCmd("partprobe -s %s" % disk)
-        cmd_part(is_exception=False)
+        bash.bash_roe("partprobe -s %s" % disk)
 
-        cmd_type = shell.ShellCmd("lsblk %s -oTYPE | grep mpath" % disk)
-        cmd_type(is_exception=False)
-        if cmd_type.stdout.strip() != "":
+        cmd_type = bash.bash_o("lsblk %s -oTYPE | grep mpath" % disk)
+        if cmd_type.strip() != "":
             need_flush_mpath = True
 
-        cmd_wipefs = shell.ShellCmd("wipefs -af %s" % disk)
-        cmd_wipefs(is_exception=False)
+        bash.bash_roe("wipefs -af %s" % disk)
 
         if need_flush_mpath:
-            cmd_flush_mpath = shell.ShellCmd("multipath -f %s && systemctl restart multipathd.service && sleep 1" % disk)
-            cmd_flush_mpath(is_exception=False)
+            bash.bash_roe("multipath -f %s && systemctl restart multipathd.service && sleep 1" % disk)
 
         if exists_vg is not None:
             logger.debug("found vg %s exists on this pv %s, start wipe" %
@@ -1204,3 +1200,19 @@ def remove_partial_lv_dm(vgUuid):
 
     for volume in o:
         bash.bash_roe("dmsetup remove %s" % volume.strip().split(" ")[0])
+
+
+@bash.in_bash
+def unpriv_sgio():
+    bash.bash_roe("for i in `ls /sys/block/`; do echo 1 > /sys/block/$i/queue/unpriv_sgio; done")
+
+
+@bash.in_bash
+@linux.retry(times=3, sleep_time=1)
+def enable_multipath():
+    bash.bash_roe("modprobe dm-multipath")
+    bash.bash_roe("modprobe dm-round-robin")
+    bash.bash_roe("mpathconf --enable --with_multipathd y")
+    bash.bash_roe("systemctl enable multipathd")
+    if not is_multipath_running():
+        raise RetryException("multipath still not running")
