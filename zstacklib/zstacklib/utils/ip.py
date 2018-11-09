@@ -118,3 +118,26 @@ class Ipv6Address(object):
                     temp.append(item)
 
             return ":".join(temp) + "::/" + str(prefixlen)
+
+def get_link_local_address(mac):
+    ''' get ipv6 link local address from 48bits mac address,
+        details are described at the https://tools.ietf.org/html/rfc4291#section-2.5.1
+        for example mac address 00:01:02:aa:bb:cc
+        step 1. inverting the universal/local bit of mac address to 02:01:02:0a:0b:0c
+        step 2. insert fffe in the middle of mac address to 02:01:02:ff:fe:0a:0b:0c
+        step 3. convert to ip address with fe80::/64, strip the leading '0' in each sector between ':'
+                fe80::201:2ff:fe0a:b0c
+    '''
+    macs = mac.strip("\n").split(":")
+
+    # step 1. inverting the "u" bit of mac address
+    macs[0] = hex(int(macs[0], 16) ^ 2)[2:]
+
+    # step 2, insert "fffe"
+    part1 = macs[0] + macs[1] + ":"
+    part2 = macs[2] + "ff" + ":"
+    part3 = "fe" + macs[3] + ":"
+    part4 = macs[4] + macs[5]
+
+    #step 3
+    return "fe80::" + part1.lstrip("0") + part2.lstrip("0") + part3.lstrip("0") + part4.lstrip("0")
