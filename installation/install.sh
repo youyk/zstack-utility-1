@@ -19,6 +19,7 @@ UBUNTU1604='UBUNTU16.04'
 UBUNTU='UBUNTU'
 RHEL7='RHEL7'
 ISOFT4='ISOFT4'
+KYLIN402='KYLIN402'
 UPGRADE='n'
 FORCE='n'
 MANAGEMENT_INTERFACE=`ip route | grep default | head -n 1 | cut -d ' ' -f 5`
@@ -431,9 +432,12 @@ cs_check_mysql_password () {
     #If user didn't assign mysql root password, then check original zstack mysql password status
     if [ 'y' != $UPGRADE ]; then
         if [ -z $ONLY_INSTALL_ZSTACK ];then
-            rpm -qa | grep mysql-community >>$ZSTACK_INSTALL_LOG 2>&1
-            if [ $? -eq 0 ];then
-                fail2 "Detect mysql-community installed, please uninstall it due to ZStack will use mariadb."
+            which rpm >/dev/null 2>&1
+            if [ $? -eq 0 ]; then
+                rpm -qa | grep mysql-community >>$ZSTACK_INSTALL_LOG 2>&1
+                if [ $? -eq 0 ];then
+                    fail2 "Detect mysql-community installed, please uninstall it due to ZStack will use mariadb."
+                fi
             fi
         fi
 
@@ -534,7 +538,12 @@ check_system(){
             fi
             . /etc/lsb-release
         else
-            fail2 "Host OS checking failure: your system is: `cat /etc/issue`, $PRODUCT_NAME management node only support $SUPPORTED_OS currently"
+            grep 'Kylin 4.0.2' /etc/issue >>$ZSTACK_INSTALL_LOG 2>&1
+            if [ $? -eq 0 ]; then
+                OS=$KYLIN402
+            else
+                fail2 "Host OS checking failure: your system is: `cat /etc/issue`, $PRODUCT_NAME management node only support $SUPPORTED_OS currently"
+            fi
         fi
     fi
 
@@ -1196,6 +1205,10 @@ is_install_general_libs_deb(){
         >>$ZSTACK_INSTALL_LOG 2>&1
     [ $? -ne 0 ] && fail "install system lib 2 failed"
 
+    #bypass iptables installation dialog
+    echo iptables-persistent iptables-persistent/autosave_v4 boolean true | sudo debconf-set-selections
+    echo iptables-persistent iptables-persistent/autosave_v6 boolean true | sudo debconf-set-selections
+
     apt-get -y install \
         nfs-common \
         nfs-kernel-server \
@@ -1210,6 +1223,7 @@ is_install_general_libs_deb(){
         libffi-dev \
         libssl-dev \
         bash-completion \
+        chrony \
         $mysql_pkg \
         >>$ZSTACK_INSTALL_LOG 2>&1
     [ $? -ne 0 ] && fail "install system lib 2 failed"

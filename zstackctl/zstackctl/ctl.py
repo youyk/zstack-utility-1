@@ -1813,13 +1813,20 @@ class StartCmd(Command):
                 error("chrony.serverIp not configured")
 
             mn_ip = ctl.read_property('management.server.ip')
-            chrony_running = shell_return("systemctl status chronyd | grep 'active[[:space:]]*(running)'")
+            distro = platform.dist()[0]
+            if distro in RPM_BASED_OS:
+                chrony_running = shell_return("systemctl status chronyd | grep 'active[[:space:]]*(running)'")
+            if distro in DEB_BASED_OS:
+                chrony_running = shell_return("systemctl status chrony | grep 'active[[:space:]]*(running)'")
 
             # mn is chrony server
             if mn_ip in source_ips:
                 if chrony_running != 0:
                     warn("chrony source is set to management node, but server is not running, try to restart it now...")
-                    shell("systemctl disable ntpd || true; systemctl enable chronyd ; systemctl restart chronyd")
+                    if distro in RPM_BASED_OS:
+                        shell("systemctl disable ntpd || true; systemctl enable chronyd ; systemctl restart chronyd")
+                    if distro in DEB_BASED_OS:
+                        shell("systemctl disable ntp || true; systemctl enable chrony ; systemctl restart chrony")
                 return
 
             # mn is chrony client
@@ -1831,7 +1838,10 @@ class StartCmd(Command):
             with open('/etc/chrony.conf', 'a') as fd:
                 fd.writelines('\n'.join(["server %s iburst" % ip for ip in source_ips]))
 
-            shell("systemctl disable ntpd || true; systemctl enable chronyd || true; systemctl restart chronyd || true")
+            if distro in RPM_BASED_OS:
+                shell("systemctl disable ntpd || true; systemctl enable chronyd || true; systemctl restart chronyd || true")
+            if distro in DEB_BASED_OS:
+                shell("systemctl disable ntp || true; systemctl enable chrony || true; systemctl restart chrony || true")
             info("chronyd restarted")
 
         def prepare_qemu_kvm_repo():
@@ -2175,8 +2185,17 @@ class InstallDbCmd(Command):
       shell: yum clean metadata; yum --nogpgcheck install -y  mariadb mariadb-server iptables-services
       register: install_result
 
-    - name: install MySQL for Ubuntu
+    - name: install MySQL for Ubuntu/Debian
       when: ansible_os_family == 'Debian'
+      apt: pkg={{item}} update_cache=yes
+      with_items:
+        - mariadb-client
+        - mariadb-server
+        - iptables-persistent
+      register: install_result
+
+    - name: install MySQL for Kylin
+      when: ansible_os_family == 'Kylin'
       apt: pkg={{item}} update_cache=yes
       with_items:
         - mariadb-client
@@ -2207,6 +2226,10 @@ class InstallDbCmd(Command):
       when: ansible_os_family == 'Debian'
       service: name=mysql state=restarted enabled=yes
 
+    - name: enable MySQL on Kylin
+      when: ansible_os_family == 'Kylin'
+      service: name=mysql state=restarted enabled=yes
+
     - name: change root password
       shell: $change_password_cmd
       register: change_root_result
@@ -2226,6 +2249,13 @@ class InstallDbCmd(Command):
 
     - name: rollback MySql installation on Ubuntu
       when: ansible_os_family == 'Debian' and change_root_result.rc != 0 and install_result.changed == True
+      apt: pkg={{item}} state=absent update_cache=yes
+      with_items:
+        - mysql-client
+        - mysql-server
+
+    - name: rollback MySql installation on Kylin
+      when: ansible_os_family == 'Kylin' and change_root_result.rc != 0 and install_result.changed == True
       apt: pkg={{item}} state=absent update_cache=yes
       with_items:
         - mysql-client
