@@ -28,7 +28,7 @@ trusted_host = ""
 ansible.constants.HOST_KEY_CHECKING = False
 
 RPM_BASED_OS = "CentOS", "RedHat", "Alibaba"
-DEB_BASED_OS = "Ubuntu", "Debian"
+DEB_BASED_OS = "Ubuntu", "Debian", "Kylin"
 
 class AgentInstallArg(object):
     def __init__(self, trusted_host, pip_url, virtenv_path, init_install):
