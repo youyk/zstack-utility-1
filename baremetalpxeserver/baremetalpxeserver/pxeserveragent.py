@@ -4,6 +4,9 @@ import os
 import os.path
 import pprint
 import shutil
+import socket
+import fcntl
+import struct
 import traceback
 from netaddr import IPNetwork, IPAddress
 
@@ -86,7 +89,7 @@ class PxeServerAgent(object):
     BAREMETAL_LIB_PATH = "/var/lib/zstack/baremetal/"
     BAREMETAL_LOG_PATH = "/var/log/zstack/baremetal/"
     DNSMASQ_CONF_PATH = BAREMETAL_LIB_PATH + "dnsmasq/dnsmasq.conf"
-    DHCP_HOSTS_FILE = BAREMETAL_LIB_PATH + "dnsmasq/hosts.dhcp"
+    HOSTS_DHCP_FILE = BAREMETAL_LIB_PATH + "dnsmasq/hosts.dhcp"
     DNSMASQ_LOG_PATH = BAREMETAL_LOG_PATH + "dnsmasq.log"
     TFTPBOOT_PATH = BAREMETAL_LIB_PATH + "tftpboot/"
     VSFTPD_CONF_PATH = BAREMETAL_LIB_PATH + "vsftpd/vsftpd.conf"
@@ -163,6 +166,15 @@ class PxeServerAgent(object):
         bash_r("kill -9 `ps -ef | grep -v grep | grep 'dnsmasq -C %s' | awk '{ print $2 }'`" % self.DNSMASQ_CONF_PATH)
 
     @staticmethod
+    def _get_ip_address(ifname):
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        return socket.inet_ntoa(fcntl.ioctl(
+            s.fileno(),
+            0x8915,  # SIOCGIFADDR
+            struct.pack('256s', ifname[:15])
+        )[20:24])
+
+    @staticmethod
     def _is_belong_to_same_subnet(addr1, addr2, netmask):
         return IPAddress(addr1) in IPNetwork("%s/%s" % (addr2, netmask))
 
@@ -179,7 +191,7 @@ class PxeServerAgent(object):
         self.storage_path = cmd.storagePath
 
         # check dhcp interface and dhcp range
-        pxeserver_dhcp_nic_ip = linux.get_device_ip(cmd.dhcpInterface).strip("/")[0]
+        pxeserver_dhcp_nic_ip = self._get_ip_address(cmd.dhcpInterface).strip()
         pxeserver_dhcp_nic_nm = linux.get_netmask_of_nic(cmd.dhcpInterface).strip()
         if not self._is_belong_to_same_subnet(cmd.dhcpRangeBegin, pxeserver_dhcp_nic_ip, pxeserver_dhcp_nic_nm) or \
                 not self._is_belong_to_same_subnet(cmd.dhcpRangeEnd, pxeserver_dhcp_nic_ip, pxeserver_dhcp_nic_nm):
@@ -201,7 +213,7 @@ class PxeServerAgent(object):
         # get pxe server capacity
         self._set_capacity_to_response(rsp)
 
-        # init dhcp.conf
+        # init dnsmasq.conf
         dhcp_conf = """interface={DHCP_INTERFACE}
 port=0
 dhcp-boot=pxelinux.0
@@ -211,14 +223,19 @@ log-dhcp
 log-facility={DNSMASQ_LOG_PATH}
 dhcp-range={DHCP_RANGE}
 dhcp-option=1,{DHCP_NETMASK}
-dhcp-hostsfile={DHCP_HOSTS_FILE}
+dhcp-hostsfile={HOSTS_DHCP_FILE}
 """.format(DHCP_INTERFACE=cmd.dhcpInterface,
            DHCP_RANGE="%s,%s,%s" % (cmd.dhcpRangeBegin, cmd.dhcpRangeEnd, cmd.dhcpRangeNetmask),
            DHCP_NETMASK=cmd.dhcpRangeNetmask,
            TFTPBOOT_PATH=self.TFTPBOOT_PATH,
-           DHCP_HOSTS_FILE=self.DHCP_HOSTS_FILE,
+           HOSTS_DHCP_FILE=self.HOSTS_DHCP_FILE,
            DNSMASQ_LOG_PATH=self.DNSMASQ_LOG_PATH)
         with open(self.DNSMASQ_CONF_PATH, 'w') as f:
+            f.write(dhcp_conf)
+
+        # init hosts.dhcp
+        dhcp_conf = """de:ad:c0:de:ca:fe,ignore"""
+        with open(self.HOSTS_DHCP_FILE, 'w') as f:
             f.write(dhcp_conf)
 
         # init vsftpd.conf
@@ -330,6 +347,13 @@ http {
     def ping(self, req):
         rsp = PingResponse()
         rsp.uuid = self.uuid
+
+        # DETECT ROGUE DHCP SERVER
+        cmd = json_object.loads(req[http.REQUEST_BODY])
+        ret, output = bash_ro("nmap -sU -p67 --script broadcast-dhcp-discover -e %s | grep 'Server Identifier'" % cmd.dhcpInterface)
+        if ret == 0:
+            raise PxeServerError("rogue dhcp server[IP:%s] detected" % output.strip().split(' ')[-1])
+
         return json_object.dumps(rsp)
 
     @reply_error
@@ -384,7 +408,7 @@ http {
         self.dhcp_interface = cmd.dhcpInterface
 
         # create ks.cfg
-        pxeserver_dhcp_nic_ip = linux.get_device_ip(cmd.dhcpInterface).strip("/")[0]
+        pxeserver_dhcp_nic_ip = self._get_ip_address(cmd.dhcpInterface).strip()
         ks_cfg_name = cmd.pxeNicMac.replace(":", "-")
         ks_cfg_file = os.path.join(self.KS_CFG_PATH, ks_cfg_name)
         ks_tmpl_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'ks_tmpl')
